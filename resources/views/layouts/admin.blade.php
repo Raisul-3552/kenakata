@@ -12,7 +12,10 @@
         <div class="collapse navbar-collapse" id="navbarNav">
             <ul class="navbar-nav me-auto">
                 <li class="nav-item">
-                    <a class="nav-link active" href="/admin/dashboard">Employees</a>
+                    <a class="nav-link {{ request()->is('admin/dashboard') ? 'active' : '' }}" href="/admin/dashboard">Employees</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link {{ request()->is('admin/profile') ? 'active' : '' }}" href="/admin/profile">Profile</a>
                 </li>
             </ul>
             <ul class="navbar-nav">
