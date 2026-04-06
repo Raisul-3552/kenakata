@@ -18,6 +18,9 @@ Route::get('/register', function () {
 Route::get('/admin/dashboard', function () {
     return view('admin.dashboard');
 });
+Route::get('/admin/profile', function () {
+    return view('admin.profile');
+});
 
 // Employee
 Route::get('/employee/dashboard', function () {
@@ -44,4 +47,7 @@ Route::get('/customer/cart', function () {
 // DeliveryMan
 Route::get('/deliveryman/dashboard', function () {
     return view('deliveryman.dashboard');
+});
+Route::get('/deliveryman/profile', function () {
+    return view('deliveryman.profile');
 });

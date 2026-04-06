@@ -1,4 +1,19 @@
 @extends('layouts.admin')
+@section('styles')
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<style>
+    .select2-container .select2-selection--single {
+        height: 38px !important;
+        border: 1px solid #dee2e6 !important;
+    }
+    .select2-container--default .select2-selection--single .select2-selection__rendered {
+        line-height: 36px !important;
+    }
+    .select2-container--default .select2-selection--single .select2-selection__arrow {
+        height: 36px !important;
+    }
+</style>
+@endsection
 
 @section('admin_content')
 <!-- Add Employee Form -->
@@ -11,7 +26,9 @@
             <div class="row g-3">
                 <div class="col-md-4">
                     <label class="form-label">Full Name</label>
-                    <input type="text" class="form-control" id="emp_name" placeholder="Employee name" required>
+                    <select class="form-control" id="emp_name" required>
+                        <option value="">Search customer name...</option>
+                    </select>
                 </div>
                 <div class="col-md-4">
                     <label class="form-label">Email</label>
@@ -54,10 +71,49 @@
 @endsection
 
 @section('scripts')
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script>
+    let employeesData = [];
+
     document.addEventListener('DOMContentLoaded', () => {
         loadEmployees();
+        initializeSelect2();
     });
+
+    function initializeSelect2() {
+        $('#emp_name').select2({
+            placeholder: 'Search customer name...',
+            minimumInputLength: 1,
+            ajax: {
+                url: `${API_URL}/admin/customers/search`,
+                dataType: 'json',
+                headers: getHeaders(),
+                delay: 250,
+                data: function (params) {
+                    return { q: params.term };
+                },
+                processResults: function (data) {
+                    return {
+                        results: data.map(customer => ({
+                            id: customer.CustomerName,
+                            text: customer.CustomerName,
+                            email: customer.Email
+                        }))
+                    };
+                },
+                cache: true
+            },
+            language: {
+                noResults: function () {
+                    return "no match name";
+                }
+            }
+        }).on('select2:select', function (e) {
+            const data = e.params.data;
+            document.getElementById('emp_email').value = data.email;
+        });
+    }
 
     function loadEmployees() {
         const tbody = document.getElementById('employee-list');
@@ -72,6 +128,7 @@
         })
         .then(data => {
             const employees = data.employees || data;
+            employeesData = employees; // Store for lookup
             if(employees && employees.length > 0) {
                 tbody.innerHTML = employees.map(emp => `
                     <tr>
@@ -81,7 +138,7 @@
                         <td>${emp.Phone}</td>
                         <td>${emp.Address || ''}</td>
                         <td>
-                            <button class="btn btn-sm btn-danger" onclick="deleteEmployee(${emp.EmployeeID})">🗑️ Delete</button>
+                            <button class="btn btn-sm btn-danger" onclick="deleteEmployee(${emp.EmployeeID}, '${emp.EmployeeName}')">🗑️ Delete</button>
                         </td>
                     </tr>
                 `).join('');
@@ -112,7 +169,8 @@
         .then(res => res.json().then(data => ({ status: res.status, body: data })))
         .then(res => {
             if(res.status === 201) {
-                alertDiv.innerHTML = `<div class="alert alert-success">✅ Employee added successfully!</div>`;
+                alertDiv.innerHTML = `<div class="alert alert-success">✅ Employee <strong>${payload.EmployeeName}</strong> added successfully!</div>`;
+                $('#emp_name').val(null).trigger('change');
                 document.getElementById('addEmployeeForm').reset();
                 loadEmployees();
             } else {
@@ -126,8 +184,8 @@
     });
 
     // Delete Employee
-    function deleteEmployee(id) {
-        if(!confirm('Are you sure you want to delete this employee?')) return;
+    function deleteEmployee(id, name) {
+        if(!confirm(`Are you sure you want to delete employee '${name}'?`)) return;
         const alertDiv = document.getElementById('alert-messages');
 
         fetch(`${API_URL}/admin/employees/${id}`, {
@@ -136,7 +194,7 @@
         })
         .then(res => res.json())
         .then(data => {
-            alertDiv.innerHTML = `<div class="alert alert-success">✅ ${data.message}</div>`;
+            alertDiv.innerHTML = `<div class="alert alert-success">✅ Employee <strong>${name}</strong> has been successfully removed.</div>`;
             loadEmployees();
         })
         .catch(err => {
