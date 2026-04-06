@@ -95,6 +95,15 @@ class EmployeeController extends Controller
         return response()->json(DeliveryMan::where('Status', 'Available')->get());
     }
 
+    public function getAllDeliveryMenStatus()
+    {
+        $deliveryMen = DeliveryMan::with(['deliveries' => function ($query) {
+            $query->whereIn('DeliveryStatus', ['Pending', 'In Progress'])
+                  ->with('order.customer');
+        }])->get();
+        return response()->json($deliveryMen);
+    }
+
     public function assignDelivery($id, Request $request)
     {
         // Using Stored Procedure defined in Step 1

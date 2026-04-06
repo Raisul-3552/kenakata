@@ -253,15 +253,28 @@
         const select = document.getElementById('deliveryman-select');
         select.innerHTML = `<option value="">Searching for free riders...</option>`;
 
-        fetch(`${API_URL}/employee/deliverymen/available`, { headers: getHeaders() })
+        fetch(`${API_URL}/employee/deliverymen/all`, { headers: getHeaders() })
         .then(res => res.json())
         .then(data => {
             if(data && data.length > 0) {
-                select.innerHTML = data.map(rider => `
-                    <option value="${rider.DelManID}">${rider.DelManName} (ID: ${rider.DelManID})</option>
-                `).join('');
+                select.innerHTML = data.map(rider => {
+                    if (rider.Status === 'Available') {
+                        return `<option value="${rider.DelManID}">🟢 ${rider.DelManName} (ID: ${rider.DelManID} - Available)</option>`;
+                    } else {
+                        // Rider is busy, find out who they are delivering to
+                        let busyText = "Busy";
+                        if (rider.deliveries && rider.deliveries.length > 0) {
+                            // Find the first active delivery
+                            const activeTask = rider.deliveries.find(d => d.DeliveryStatus === 'Pending' || d.DeliveryStatus === 'In Progress');
+                            if (activeTask && activeTask.order && activeTask.order.customer) {
+                                busyText = `Delivering to: ${activeTask.order.customer.CustomerName}`;
+                            }
+                        }
+                        return `<option value="${rider.DelManID}" disabled>🔴 ${rider.DelManName} (ID: ${rider.DelManID} - ${busyText})</option>`;
+                    }
+                }).join('');
             } else {
-                select.innerHTML = `<option value="">All riders are currently busy</option>`;
+                select.innerHTML = `<option value="">No riders exist in the system yet</option>`;
             }
         })
         .catch(err => {

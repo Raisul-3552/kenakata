@@ -215,15 +215,22 @@
             }
 
             const payload = {
-                CustomerName: document.getElementById('reg_name').value,
                 Phone: document.getElementById('reg_phone').value,
                 Email: document.getElementById('reg_email').value,
                 Address: document.getElementById('reg_address').value,
                 Password: password
             };
 
-            // For now only customer registration is supported via API
-            fetch('/api/customer/register', {
+            const role = selectedRole.toLowerCase();
+            const endpoint = role === 'deliveryman' ? '/api/deliveryman/register' : '/api/customer/register';
+
+            if (role === 'deliveryman') {
+                payload.DelManName = document.getElementById('reg_name').value;
+            } else {
+                payload.CustomerName = document.getElementById('reg_name').value;
+            }
+
+            fetch(endpoint, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
                 body: JSON.stringify(payload)
@@ -233,7 +240,12 @@
                 if (res.status === 201) {
                     localStorage.setItem('kenakata_token', res.body.token);
                     localStorage.setItem('kenakata_role', res.body.role);
-                    window.location.href = '/customer/dashboard';
+                    
+                    if (res.body.role === 'customer') {
+                        window.location.href = '/customer/dashboard';
+                    } else if (res.body.role === 'deliveryman') {
+                        window.location.href = '/deliveryman/dashboard';
+                    }
                 } else {
                     errorDiv.innerHTML = JSON.stringify(res.body.errors || res.body.message);
                     errorDiv.style.display = 'block';

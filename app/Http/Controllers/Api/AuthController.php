@@ -65,6 +65,39 @@ class AuthController extends Controller
         ], 201);
     }
 
+    public function deliveryManRegister(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'DelManName' => 'required|string|max:255',
+            'Phone' => 'required|string|max:20',
+            'Email' => 'required|string|email|max:255|unique:DeliveryMan',
+            'Password' => 'required|string|min:6',
+            'Address' => 'required|string',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        $deliveryMan = DeliveryMan::create([
+            'DelManName' => $request->DelManName,
+            'Phone' => $request->Phone,
+            'Email' => $request->Email,
+            'Password' => Hash::make($request->Password),
+            'Address' => $request->Address,
+            'Status' => 'Available'
+        ]);
+
+        $token = $deliveryMan->createToken('deliveryman-token')->plainTextToken;
+
+        return response()->json([
+            'message' => 'Registration successful',
+            'token' => $token,
+            'user' => $deliveryMan,
+            'role' => 'deliveryman'
+        ], 201);
+    }
+
     private function login(Request $request, $modelClass, $tokenName)
     {
         $request->validate([

@@ -45,7 +45,10 @@
         <div class="collapse navbar-collapse" id="navbarNav">
             <ul class="navbar-nav me-auto">
                 <li class="nav-item">
-                    <a class="nav-link active" href="/deliveryman/dashboard">My Tasks</a>
+                    <a class="nav-link {{ request()->is('deliveryman/dashboard') ? 'active' : '' }}" href="/deliveryman/dashboard">My Tasks</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link {{ request()->is('deliveryman/profile') ? 'active' : '' }}" href="/deliveryman/profile">Profile</a>
                 </li>
             </ul>
             <ul class="navbar-nav">
