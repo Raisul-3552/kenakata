@@ -55,6 +55,9 @@ Route::get('/customer/cart', function () {
 Route::get('/customer/orders', function () {
     return view('customer.orders');
 });
+Route::get('/customer/wallet', function () {
+    return view('customer.wallet');
+});
 
 // DeliveryMan
 Route::get('/deliveryman/dashboard', function () {

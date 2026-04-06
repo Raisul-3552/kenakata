@@ -9,12 +9,22 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Coupon;
 use App\Models\Product;
+use App\Models\Wallet;
+use App\Models\WalletTransaction;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 
 class CustomerController extends Controller
 {
+    private function getOrCreateWallet($customerID)
+    {
+        return Wallet::firstOrCreate(
+            ['CustomerID' => $customerID],
+            ['Balance' => 0]
+        );
+    }
+
     // ─── Profile ──────────────────────────────────────────────────────────────
 
     public function getProfile(Request $request)
@@ -183,11 +193,19 @@ class CustomerController extends Controller
     {
         DB::beginTransaction();
         try {
+            $wallet = $this->getOrCreateWallet($request->user()->CustomerID);
+            $finalTotal = (float) $request->TotalAmount;
+
+            if ($wallet->Balance < $finalTotal) {
+                DB::rollBack();
+                return response()->json(['message' => 'Insufficient wallet balance. Please add funds first.'], 422);
+            }
+
             $order = Order::create([
                 'CustomerID'  => $request->user()->CustomerID,
                 'CouponID'    => $request->CouponID,
                 'OrderStatus' => 'Pending',
-                'TotalAmount' => $request->TotalAmount,
+                'TotalAmount' => $finalTotal,
                 'OrderDate'   => now()->format('Y-m-d'),
                 'Address'     => $request->Address,
             ]);
@@ -218,6 +236,17 @@ class CustomerController extends Controller
                 CartItem::where('CartID', $cart->CartID)->delete();
             }
 
+            $wallet->Balance -= $finalTotal;
+            $wallet->save();
+
+            WalletTransaction::create([
+                'WalletID' => $wallet->WalletID,
+                'Amount' => $finalTotal,
+                'TransactionType' => 'Debit',
+                'Description' => 'Order payment for Order #' . $order->OrderID,
+                'TransactionDate' => now(),
+            ]);
+
             DB::commit();
             return response()->json($order, 201);
         } catch (\Exception $e) {
@@ -245,10 +274,12 @@ class CustomerController extends Controller
                 ->first();
 
             if (!$order) {
+                DB::rollBack();
                 return response()->json(['message' => 'Order not found'], 404);
             }
 
             if ($order->OrderStatus !== 'Pending') {
+                DB::rollBack();
                 return response()->json(['message' => 'Only pending orders can be cancelled'], 400);
             }
 
@@ -259,6 +290,20 @@ class CustomerController extends Controller
                     $product->save();
                 }
             }
+
+            $wallet = $this->getOrCreateWallet($order->CustomerID);
+            $refundAmount = (float) $order->TotalAmount;
+
+            $wallet->Balance += $refundAmount;
+            $wallet->save();
+
+            WalletTransaction::create([
+                'WalletID' => $wallet->WalletID,
+                'Amount' => $refundAmount,
+                'TransactionType' => 'Credit',
+                'Description' => 'Refund for cancelled Order #' . $order->OrderID,
+                'TransactionDate' => now(),
+            ]);
 
             $order->OrderStatus = 'Cancelled';
             $order->save();
@@ -301,5 +346,54 @@ class CustomerController extends Controller
         }
 
         return response()->json(['valid' => true, 'coupon' => $coupon[0]]);
+    }
+
+    public function getWallet(Request $request)
+    {
+        $wallet = $this->getOrCreateWallet($request->user()->CustomerID);
+
+        $transactions = WalletTransaction::where('WalletID', $wallet->WalletID)
+            ->orderByDesc('TransactionDate')
+            ->limit(50)
+            ->get();
+
+        return response()->json([
+            'wallet' => $wallet,
+            'transactions' => $transactions,
+        ]);
+    }
+
+    public function addWalletBalance(Request $request)
+    {
+        $request->validate([
+            'Amount' => 'required|numeric|min:1',
+            'Description' => 'nullable|string|max:255',
+        ]);
+
+        DB::beginTransaction();
+        try {
+            $wallet = $this->getOrCreateWallet($request->user()->CustomerID);
+            $amount = (float) $request->Amount;
+
+            $wallet->Balance += $amount;
+            $wallet->save();
+
+            WalletTransaction::create([
+                'WalletID' => $wallet->WalletID,
+                'Amount' => $amount,
+                'TransactionType' => 'Credit',
+                'Description' => $request->Description ?: 'Wallet top-up',
+                'TransactionDate' => now(),
+            ]);
+
+            DB::commit();
+            return response()->json([
+                'message' => 'Balance added successfully',
+                'wallet' => $wallet,
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['message' => 'Failed to add balance: ' . $e->getMessage()], 500);
+        }
     }
 }

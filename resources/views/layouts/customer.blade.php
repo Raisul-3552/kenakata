@@ -114,11 +114,15 @@
                     <a class="nav-link {{ Request::is('customer/profile*') ? 'active' : '' }}" href="/customer/profile">Profile</a>
                 </li>
                 <li class="nav-item">
+                    <a class="nav-link {{ Request::is('customer/wallet*') ? 'active' : '' }}" href="/customer/wallet">Wallet</a>
+                </li>
+                <li class="nav-item">
                     <a class="nav-link {{ Request::is('customer/cart*') ? 'active' : '' }}" href="/customer/cart">Cart</a>
                 </li>
             </ul>
 
             <div class="d-flex align-items-center">
+                <span id="wallet-balance-nav" class="badge me-3" style="background-color: var(--accent-orange); color: #111827;">Wallet: Tk 0</span>
                 <a href="/customer/cart" class="text-decoration-none me-3" id="cart-counter-nav">
                     <span class="badge" style="background-color: var(--accent-cyan);">
                         Cart (0)
@@ -151,6 +155,32 @@
         const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
         const navCounter = document.getElementById('cart-counter-nav');
         if (navCounter) navCounter.querySelector('.badge').innerText = `Cart (${totalItems})`;
+    }
+
+    function loadWalletBalance() {
+        const token = localStorage.getItem('kenakata_token');
+        if (!token) return;
+
+        fetch(`${API_URL}/customer/wallet`, { headers: getHeaders() })
+        .then(r => r.ok ? r.json() : null)
+        .then(data => {
+            const wallet = data && data.wallet ? data.wallet : null;
+            const balance = wallet ? Number(wallet.Balance || 0) : 0;
+            window.customerWalletBalance = balance;
+
+            const badge = document.getElementById('wallet-balance-nav');
+            if (badge) {
+                badge.innerText = `Wallet: Tk ${balance.toFixed(0)}`;
+            }
+
+            window.dispatchEvent(new CustomEvent('wallet:updated', {
+                detail: { balance }
+            }));
+        })
+        .catch(() => {
+            const badge = document.getElementById('wallet-balance-nav');
+            if (badge) badge.innerText = 'Wallet: Tk 0';
+        });
     }
 
     // ─── Add to cart (localStorage + DB sync) ────────────────────────────────
@@ -221,6 +251,7 @@
     // ─── On load: sync DB cart back to localStorage (so cart page is accurate) ─
     document.addEventListener('DOMContentLoaded', () => {
         updateCartCount();
+        loadWalletBalance();
 
         // Pull latest cart from DB and sync to localStorage
         const token = localStorage.getItem('kenakata_token');

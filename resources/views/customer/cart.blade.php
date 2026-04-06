@@ -128,6 +128,14 @@
                     <textarea class="form-control" id="delivery-address" rows="3" placeholder="Enter your full street address"></textarea>
                 </div>
 
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between">
+                        <span class="text-muted">Wallet Balance</span>
+                        <span id="summary-wallet-balance" class="fw-bold text-warning">Tk 0</span>
+                    </div>
+                    <div id="wallet-warning" class="small text-danger mt-1" style="display:none;">Insufficient wallet balance for this order.</div>
+                </div>
+
                 <button class="checkout-btn" id="btn-place-order" onclick="placeOrder()">
                     Place Order Now
                 </button>
@@ -145,6 +153,7 @@
 
     document.addEventListener('DOMContentLoaded', () => {
         renderCart();
+        window.addEventListener('wallet:updated', () => updateSummary());
     });
 
     // ── Rendering ─────────────────────────────────────────────────────────────
@@ -277,6 +286,22 @@
         const total = Math.max(0, subtotal - discount);
         document.getElementById('summary-subtotal').innerText = `Tk ${subtotal.toFixed(0)}`;
         document.getElementById('summary-total').innerText    = `Tk ${total.toFixed(0)}`;
+
+        const walletBalance = Number(window.customerWalletBalance || 0);
+        document.getElementById('summary-wallet-balance').innerText = `Tk ${walletBalance.toFixed(0)}`;
+
+        const insufficient = total > walletBalance;
+        const warn = document.getElementById('wallet-warning');
+        const btn = document.getElementById('btn-place-order');
+        if (insufficient) {
+            warn.style.display = 'block';
+            btn.disabled = true;
+            btn.style.opacity = 0.7;
+        } else {
+            warn.style.display = 'none';
+            btn.disabled = false;
+            btn.style.opacity = 1;
+        }
     }
 
     // ── Coupon ────────────────────────────────────────────────────────────────
@@ -328,6 +353,15 @@
         const subtotal   = cart.reduce((sum, i) => sum + (i.price * i.quantity), 0);
         const discount   = currentCoupon ? subtotal * (currentCoupon.DiscountAmount / 100) : 0;
         const finalTotal = Math.max(0, subtotal - discount);
+        const walletBalance = Number(window.customerWalletBalance || 0);
+
+        if (finalTotal > walletBalance) {
+            btn.disabled  = false;
+            btn.innerHTML = 'Place Order Now';
+            msg.className = 'mt-3 text-center small text-danger';
+            msg.innerText = 'Insufficient wallet balance. Please add funds in Wallet page.';
+            return;
+        }
 
         fetch(`${API_URL}/customer/orders`, {
             method: 'POST',
@@ -349,6 +383,9 @@
                 msg.className = 'mt-3 text-center small text-info';
                 msg.innerText = '✅ Order placed! Redirecting...';
                 saveCart([]);
+                if (typeof loadWalletBalance === 'function') {
+                    loadWalletBalance();
+                }
                 setTimeout(() => { window.location.href = '/customer/orders'; }, 1500);
             } else {
                 btn.disabled  = false;
