@@ -54,6 +54,9 @@ Route::middleware('auth:employee')->prefix('employee')->group(function () {
     // Delivery
     Route::get('/deliverymen/available', [EmployeeController::class, 'getAvailableDeliveryMen']);
     Route::get('/deliverymen/all', [EmployeeController::class, 'getAllDeliveryMenStatus']);
+    Route::get('/deliverymen', [EmployeeController::class, 'getDeliveryMen']);
+    Route::post('/deliverymen', [EmployeeController::class, 'addDeliveryMan']);
+    Route::delete('/deliverymen/{id}', [EmployeeController::class, 'deleteDeliveryMan']);
     Route::get('/products', [EmployeeController::class, 'getProducts']);
     Route::post('/products', [EmployeeController::class, 'addProduct']);
     Route::put('/products/{id}', [EmployeeController::class, 'editProduct']);
@@ -112,7 +115,9 @@ Route::middleware('auth:deliveryman')->prefix('deliveryman')->group(function () 
     Route::get('/deliveries', [DeliveryController::class, 'getAssignedDeliveries']);
     Route::post('/deliveries/{id}/update-status', [DeliveryController::class, 'updateStatus']);
     Route::get('/profile', [DeliveryController::class, 'getProfile']);
-    Route::post('/profile/update', [DeliveryController::class, 'updateProfile']);
+    Route::put('/profile', [DeliveryController::class, 'updateProfile']);
+    Route::post('/profile/change-password', [DeliveryController::class, 'changePassword']);
+    Route::post('/profile/toggle-status', [DeliveryController::class, 'toggleStatus']);
 });
 
 // Common logout

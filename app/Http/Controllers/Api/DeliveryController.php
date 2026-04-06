@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Delivery;
 use App\Models\DeliveryMan;
+use App\Models\Order;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 
@@ -25,6 +26,11 @@ class DeliveryController extends Controller
             'DeliveryStatus' => $request->DeliveryStatus,
             'DeliveryDate' => ($request->DeliveryStatus == 'Delivered' || $request->DeliveryStatus == 'Cancelled') ? now()->format('Y-m-d') : null,
         ]);
+
+        // Keep Order table in sync so employee dashboard reflects final delivery state.
+        if ($request->DeliveryStatus == 'Delivered') {
+            Order::where('OrderID', $delivery->OrderID)->update(['OrderStatus' => 'Delivered']);
+        }
 
         // If delivered or cancelled, set rider back to Available
         if ($request->DeliveryStatus == 'Delivered' || $request->DeliveryStatus == 'Cancelled') {
@@ -53,23 +59,48 @@ class DeliveryController extends Controller
         
         $request->validate([
             'DelManName' => 'required|string|max:255',
-            'Email' => 'required|email|unique:DeliveryMan,Email,' . $rider->DelManID . ',DelManID',
-            'Password' => 'nullable|string|min:6',
+            'Phone' => 'required|string|max:20',
+            'Address' => 'required|string|max:255',
         ]);
 
         $data = [
             'DelManName' => $request->DelManName,
-            'Email' => $request->Email,
+            'Phone' => $request->Phone,
+            'Address' => $request->Address,
         ];
-
-        if ($request->filled('Password')) {
-            $data['Password'] = Hash::make($request->Password);
-        }
 
         $rider->update($data);
 
         return response()->json([
             'message' => 'Profile updated successfully',
+            'rider' => $rider,
+        ]);
+    }
+
+    public function changePassword(Request $request)
+    {
+        $rider = $request->user();
+
+        if (!Hash::check($request->current_password, $rider->Password)) {
+            return response()->json(['message' => 'Current password is incorrect'], 422);
+        }
+
+        $request->validate(['new_password' => 'required|string|min:6']);
+        $rider->Password = Hash::make($request->new_password);
+        $rider->save();
+
+        return response()->json(['message' => 'Password changed successfully']);
+    }
+
+    public function toggleStatus(Request $request)
+    {
+        $rider = $request->user();
+        $rider->Status = $rider->Status === 'Available' ? 'Busy' : 'Available';
+        $rider->save();
+
+        return response()->json([
+            'message' => 'Status updated successfully',
+            'status' => $rider->Status,
             'rider' => $rider,
         ]);
     }

@@ -97,6 +97,9 @@
                     <a class="nav-link {{ Request::is('employee/coupons') ? 'active' : '' }}" href="/employee/coupons">🎟️ Coupons</a>
                 </li>
                 <li class="nav-item">
+                    <a class="nav-link {{ Request::is('employee/deliverymen') ? 'active' : '' }}" href="/employee/deliverymen">🚴 Deliverymen</a>
+                </li>
+                <li class="nav-item">
                     <a class="nav-link {{ Request::is('employee/profile') ? 'active' : '' }}" href="/employee/profile">👤 Profile</a>
                 </li>
             </ul>

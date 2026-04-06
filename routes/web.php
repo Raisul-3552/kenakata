@@ -38,6 +38,9 @@ Route::get('/employee/products', function () {
 Route::get('/employee/coupons', function () {
     return view('employee.coupons');
 });
+Route::get('/employee/deliverymen', function () {
+    return view('employee.deliverymen');
+});
 
 // Customer
 Route::get('/customer/dashboard', function () {

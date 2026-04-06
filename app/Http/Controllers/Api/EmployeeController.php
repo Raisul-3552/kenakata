@@ -130,6 +130,53 @@ class EmployeeController extends Controller
         return response()->json(DeliveryMan::where('Status', 'Available')->get());
     }
 
+    public function getDeliveryMen()
+    {
+        return response()->json(DeliveryMan::orderByDesc('DelManID')->get());
+    }
+
+    public function addDeliveryMan(Request $request)
+    {
+        $request->validate([
+            'DelManName' => 'required|string|max:255',
+            'Phone' => 'required|string|max:20',
+            'Email' => 'required|email|unique:DeliveryMan,Email',
+            'Address' => 'required|string|max:255',
+            'Password' => 'nullable|string|min:6',
+        ]);
+
+        $deliveryMan = DeliveryMan::create([
+            'DelManName' => $request->DelManName,
+            'Phone' => $request->Phone,
+            'Email' => $request->Email,
+            'Password' => Hash::make($request->Password ?? 'password'),
+            'Address' => $request->Address,
+            'Status' => $request->Status ?? 'Available',
+        ]);
+
+        return response()->json($deliveryMan, 201);
+    }
+
+    public function deleteDeliveryMan($id)
+    {
+        $deliveryMan = DeliveryMan::where('DelManID', $id)->first();
+        if (!$deliveryMan) {
+            return response()->json(['message' => 'Deliveryman not found'], 404);
+        }
+
+        $hasActiveDelivery = $deliveryMan->deliveries()
+            ->whereIn('DeliveryStatus', ['Pending', 'In Progress'])
+            ->exists();
+
+        if ($hasActiveDelivery) {
+            return response()->json(['message' => 'Cannot delete a deliveryman with active deliveries.'], 422);
+        }
+
+        $deliveryMan->delete();
+
+        return response()->json(['message' => 'Deliveryman deleted successfully']);
+    }
+
     public function getAllDeliveryMenStatus()
     {
         $deliveryMen = DeliveryMan::with(['deliveries' => function ($query) {

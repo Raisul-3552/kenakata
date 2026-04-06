@@ -2,28 +2,35 @@
 
 @section('employee_content')
 <div class="row g-4 mb-4">
-    <div class="col-md-3">
+    <div class="col-md-2">
         <div class="card p-4 text-center" style="background: linear-gradient(145deg, #16213e, #0f3460);">
             <div class="h1 text-success mb-2">📋</div>
             <h5 class="text-gold">Total Orders</h5>
             <div id="total-orders-count" class="h2 fw-bold">0</div>
         </div>
     </div>
-    <div class="col-md-3">
+    <div class="col-md-2">
         <div class="card p-4 text-center" style="background: linear-gradient(145deg, #1b3a4b, #102a3a);">
             <div class="h1 text-warning mb-2">⏳</div>
             <h5 class="text-gold">Pending</h5>
             <div id="pending-orders-count" class="h2 fw-bold text-warning">0</div>
         </div>
     </div>
-    <div class="col-md-3">
+    <div class="col-md-2">
         <div class="card p-4 text-center" style="background: linear-gradient(145deg, #1a4d2e, #143d24);">
             <div class="h1 text-success-light mb-2">🚲</div>
             <h5 class="text-gold">Confirmed</h5>
             <div id="confirmed-orders-count" class="h2 fw-bold text-success-light">0</div>
         </div>
     </div>
-    <div class="col-md-3">
+    <div class="col-md-2">
+        <div class="card p-4 text-center" style="background: linear-gradient(145deg, #1f4d33, #173b27);">
+            <div class="h1 text-info mb-2">✅</div>
+            <h5 class="text-gold">Delivered</h5>
+            <div id="delivered-orders-count" class="h2 fw-bold text-info">0</div>
+        </div>
+    </div>
+    <div class="col-md-2">
         <div class="card p-4 text-center" style="background: linear-gradient(145deg, #3d1a1a, #2d1414);">
             <div class="h1 text-danger mb-2">❌</div>
             <h5 class="text-gold">Cancelled</h5>
@@ -113,18 +120,21 @@
         .then(data => {
             const orders = Array.isArray(data) ? data : (data.orders || []);
             const tbody = document.getElementById('orders-list');
+            const effectiveStatuses = orders.map(getEffectiveOrderStatus);
             
             // Update stats
             document.getElementById('total-orders-count').innerText = orders.length;
-            document.getElementById('pending-orders-count').innerText = orders.filter(o => o.OrderStatus === 'Pending').length;
-            document.getElementById('confirmed-orders-count').innerText = orders.filter(o => o.OrderStatus === 'Confirmed').length;
-            document.getElementById('cancelled-orders-count').innerText = orders.filter(o => o.OrderStatus === 'Cancelled').length;
+            document.getElementById('pending-orders-count').innerText = effectiveStatuses.filter(s => s === 'Pending').length;
+            document.getElementById('confirmed-orders-count').innerText = effectiveStatuses.filter(s => s === 'Confirmed').length;
+            document.getElementById('delivered-orders-count').innerText = effectiveStatuses.filter(s => s === 'Delivered').length;
+            document.getElementById('cancelled-orders-count').innerText = effectiveStatuses.filter(s => s === 'Cancelled').length;
 
             if(orders.length > 0) {
                 tbody.innerHTML = orders.map(order => {
                     const custName = order.customer ? order.customer.CustomerName : 'Guest';
                     const custPhone = order.customer ? order.customer.Phone : 'N/A';
-                    const statusClass = getStatusClass(order.OrderStatus);
+                    const effectiveStatus = getEffectiveOrderStatus(order);
+                    const statusClass = getStatusClass(effectiveStatus);
                     const riderName = order.delivery && order.delivery.delivery_man ? 
                         `<span class="text-info"><i class="bi bi-person-badge me-1"></i>${order.delivery.delivery_man.DelManName}</span>` : 
                         '<span class="text-muted small">Not Assigned</span>';
@@ -135,7 +145,7 @@
                         <td class="ps-4"><strong>#ORD-${order.OrderID}</strong></td>
                         <td>${custName}</td>
                         <td><span class="badge bg-light text-dark">${custPhone}</span></td>
-                        <td><span class="badge bg-${statusClass} px-3 text-uppercase small">${order.OrderStatus}</span></td>
+                        <td><span class="badge bg-${statusClass} px-3 text-uppercase small">${effectiveStatus}</span></td>
                         <td class="rider-cell">${riderName}</td>
                         <td class="fw-bold text-success-light">৳${order.TotalAmount}</td>
                         <td class="text-end pe-4">${actions}</td>
@@ -155,24 +165,37 @@
     function getStatusClass(status) {
         if(status === 'Pending') return 'warning';
         if(status === 'Confirmed') return 'success';
+        if(status === 'Delivered') return 'info';
         if(status === 'Cancelled') return 'danger';
         return 'primary';
     }
 
+    function getEffectiveOrderStatus(order) {
+        if (order && order.delivery && order.delivery.DeliveryStatus === 'Delivered') {
+            return 'Delivered';
+        }
+        return order.OrderStatus;
+    }
+
     function getActionsHtml(order) {
-        if(order.OrderStatus === 'Pending') {
+        const effectiveStatus = getEffectiveOrderStatus(order);
+
+        if(effectiveStatus === 'Pending') {
             return `
                 <button class="btn btn-sm btn-success me-1 px-3 shadow-sm transition-btn" onclick="confirmOrder(${order.OrderID}, this)">✅ Confirm</button>
                 <button class="btn btn-sm btn-danger px-3 shadow-sm transition-btn" onclick="cancelOrder(${order.OrderID}, this)">❌ Cancel</button>
             `;
         }
-        if(order.OrderStatus === 'Confirmed') {
+        if(effectiveStatus === 'Confirmed') {
             const hasRider = order.delivery && order.delivery.delivery_man;
             if(hasRider) return '<span class="badge bg-primary text-white"><i class="bi bi-check-circle-fill me-1"></i>Ready for Delivery</span>';
             
             return `
                 <button class="btn btn-sm btn-info text-white px-3 shadow-sm transition-btn" onclick="openAssignModal(${order.OrderID})">🚴 Assign Rider</button>
             `;
+        }
+        if(effectiveStatus === 'Delivered') {
+            return '<span class="badge bg-info text-dark"><i class="bi bi-truck me-1"></i>Delivered</span>';
         }
         return '<span class="text-muted small">No action</span>';
     }
