@@ -11,6 +11,11 @@ use Illuminate\Support\Facades\DB;
 
 class CustomerController extends Controller
 {
+    public function getProfile(Request $request)
+    {
+        return response()->json($request->user());
+    }
+
     public function placeOrder(Request $request)
     {
         DB::beginTransaction();

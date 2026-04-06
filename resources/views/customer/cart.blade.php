@@ -2,106 +2,133 @@
 
 @section('title', 'Your Shopping Cart')
 
-@section('styles')
+@section('customer_styles')
 <style>
-    .cart-item-card {
-        transition: transform 0.2s, box-shadow 0.2s;
+    .cart-card {
+        background-color: var(--bg-surface);
+        border: 1px solid var(--border-color);
+        border-radius: 16px;
+    }
+
+    .cart-item-row {
+        background-color: rgba(255, 255, 255, 0.02);
+        border: 1px solid var(--border-color);
         border-radius: 12px;
+        transition: border-color 0.2s ease;
     }
-    .cart-item-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+
+    .cart-item-row:hover {
+        border-color: var(--accent-cyan);
     }
+
     .qty-btn {
-        width: 32px;
-        height: 32px;
+        width: 28px;
+        height: 28px;
         display: flex;
         align-items: center;
         justify-content: center;
-        border-radius: 50%;
-        border: 1px solid #ddd;
-        background: white;
+        border-radius: 6px;
+        border: 1px solid var(--border-color);
+        background-color: #020617;
+        color: white;
         cursor: pointer;
+        font-weight: bold;
     }
+
     .qty-btn:hover {
-        background: #f8f9fa;
+        border-color: var(--accent-cyan);
+        color: var(--accent-cyan);
     }
-    .summary-card {
+
+    .summary-box {
+        background-color: #020617;
+        border: 1px solid var(--border-color);
         border-radius: 16px;
-        background: #fff;
-        border: 1px solid #eee;
+        position: sticky;
+        top: 100px;
     }
-    .btn-checkout {
-        background: var(--kenakata-green);
+
+    .checkout-btn {
+        background: linear-gradient(135deg, var(--accent-cyan), #0284c7);
         color: white;
         border-radius: 10px;
-        padding: 12px;
-        font-weight: 600;
+        padding: 14px;
+        font-weight: 700;
         width: 100%;
         border: none;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        transition: transform 0.2s;
     }
-    .btn-checkout:hover {
-        background: var(--kenakata-dark);
+
+    .checkout-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3);
     }
 </style>
 @endsection
 
 @section('customer_content')
-<div class="row">
-    <div class="col-lg-8">
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <h2 class="text-success fw-bold">🛒 Your Shopping Cart</h2>
-            <button class="btn btn-outline-danger btn-sm" onclick="clearCartUI()">Clear All</button>
-        </div>
-
-        <div id="cart-items-container">
-            <!-- Items will be loaded here via JS -->
-            <div class="text-center py-5">
-                <p class="text-muted">Loading your cart...</p>
+<div class="container">
+    <div class="row g-4">
+        <div class="col-lg-8">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2 class="mb-0">Shopping Cart</h2>
+                <button class="btn btn-link text-danger text-decoration-none p-0" onclick="clearCartUI()">
+                    <small>Clear All Items</small>
+                </button>
             </div>
-        </div>
-        
-        <div class="mt-4">
-            <a href="/customer/dashboard" class="text-decoration-none text-success fw-semibold">
-                ← Continue Shopping
-            </a>
-        </div>
-    </div>
 
-    <!-- Summary Column -->
-    <div class="col-lg-4">
-        <div class="card summary-card p-4 shadow-sm">
-            <h4 class="mb-4">Order Summary</h4>
-            
-            <div class="d-flex justify-content-between mb-2">
-                <span>Subtotal</span>
-                <span id="summary-subtotal">Tk 0</span>
-            </div>
-            
-            <div class="mb-4">
-                <label class="form-label small text-muted">Promo Code</label>
-                <div class="input-group">
-                    <input type="text" class="form-control" id="coupon-code" placeholder="Enter code">
-                    <button class="btn btn-outline-success" type="button" onclick="applyCoupon()">Apply</button>
+            <div id="cart-items-container">
+                <div class="text-center py-5">
+                    <div class="spinner-border text-info"></div>
                 </div>
-                <div id="coupon-message" class="small mt-1"></div>
             </div>
-
-            <div class="d-flex justify-content-between mb-4 pt-3 border-top">
-                <span class="h5 fw-bold">Total</span>
-                <span class="h5 fw-bold text-success" id="summary-total">Tk 0</span>
-            </div>
-
-            <div class="mb-4">
-                <label class="form-label fw-semibold">Delivery Address</label>
-                <textarea class="form-control" id="delivery-address" rows="3" placeholder="Enter full address where you want to receive your order"></textarea>
-            </div>
-
-            <button class="btn-checkout" id="btn-place-order" onclick="placeOrder()">
-                Place Order Now
-            </button>
             
-            <div id="order-message" class="mt-3 text-center small"></div>
+            <div class="mt-4">
+                <a href="/customer/dashboard" class="text-decoration-none fw-bold" style="color: var(--accent-cyan);">
+                    ← Back to Products
+                </a>
+            </div>
+        </div>
+
+        <!-- Summary Column -->
+        <div class="col-lg-4">
+            <div class="summary-box p-4">
+                <h4 class="mb-4 text-white">Order Summary</h4>
+                
+                <div class="d-flex justify-content-between mb-3">
+                    <span class="text-muted">Subtotal</span>
+                    <span id="summary-subtotal" class="fw-bold text-white">Tk 0</span>
+                </div>
+                
+                <div class="mb-4">
+                    <label class="info-label mb-2 d-block">PROMO CODE</label>
+                    <div class="input-group">
+                        <input type="text" class="form-control" id="coupon-code" placeholder="Enter code">
+                        <button class="btn btn-cyan btn-sm px-3" type="button" onclick="applyCoupon()">Apply</button>
+                    </div>
+                    <div id="coupon-message" class="small mt-2"></div>
+                </div>
+
+                <div class="border-top border-secondary border-opacity-10 pt-3 mb-4">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span class="h5 fw-bold mb-0 text-white">Total</span>
+                        <span class="h4 fw-bold mb-0" style="color: var(--accent-cyan);" id="summary-total">Tk 0</span>
+                    </div>
+                </div>
+
+                <div class="mb-4">
+                    <label class="info-label mb-2 d-block">DELIVERY ADDRESS</label>
+                    <textarea class="form-control" id="delivery-address" rows="3" placeholder="Enter your full street address"></textarea>
+                </div>
+
+                <button class="checkout-btn" id="btn-place-order" onclick="placeOrder()">
+                    Place Order Now
+                </button>
+                
+                <div id="order-message" class="mt-3 text-center small"></div>
+            </div>
         </div>
     </div>
 </div>
@@ -123,38 +150,38 @@
         
         if (cart.length === 0) {
             container.innerHTML = `
-                <div class="text-center py-5 bg-white rounded shadow-sm border">
-                    <div class="mb-3" style="font-size: 50px">🛍️</div>
-                    <h5>Your cart is empty</h5>
-                    <p class="text-muted">Looks like you haven't added anything to your cart yet.</p>
-                    <a href="/customer/dashboard" class="btn btn-kenakata mt-2">Start Shopping</a>
+                <div class="text-center py-5 dark-card">
+                    <div class="mb-3" style="font-size: 40px">🛒</div>
+                    <h5 class="text-white">Your cart is empty</h5>
+                    <p class="text-muted">Looks like you haven't added anything yet.</p>
+                    <a href="/customer/dashboard" class="btn btn-cyan btn-sm mt-2 px-4">Start Shopping</a>
                 </div>`;
             updateSummary();
             return;
         }
 
         container.innerHTML = cart.map(item => `
-            <div class="card cart-item-card mb-3 border-0 shadow-sm overflow-hidden">
-                <div class="card-body p-0">
-                    <div class="row g-0 align-items-center">
-                        <div class="col-md-2 bg-light d-flex align-items-center justify-content-center p-3" style="min-height: 100px;">
-                            <span style="font-size: 40px">📦</span>
+            <div class="cart-item-row p-3 mb-3">
+                <div class="row align-items-center g-3">
+                    <div class="col-auto">
+                        <div class="dark-card d-flex align-items-center justify-content-center" style="width: 60px; height: 60px; background-color: #020617;">
+                            <span style="font-size: 24px">📦</span>
                         </div>
-                        <div class="col-md-5 p-3">
-                            <h5 class="card-title mb-1">${item.name}</h5>
-                            <p class="text-muted small mb-0">Unit Price: Tk ${item.price}</p>
+                    </div>
+                    <div class="col">
+                        <h6 class="text-white mb-1 font-bold">${item.name}</h6>
+                        <div class="text-muted small">Unit Price: Tk ${item.price}</div>
+                    </div>
+                    <div class="col-auto">
+                        <div class="d-flex align-items-center gap-2">
+                            <button class="qty-btn" onclick="changeQty(${item.id}, -1)">-</button>
+                            <span class="text-white fw-bold px-2">${item.quantity}</span>
+                            <button class="qty-btn" onclick="changeQty(${item.id}, 1)">+</button>
                         </div>
-                        <div class="col-md-3 p-3">
-                            <div class="d-flex align-items-center gap-3">
-                                <button class="qty-btn" onclick="changeQty(${item.id}, -1)">-</button>
-                                <span class="fw-bold">${item.quantity}</span>
-                                <button class="qty-btn" onclick="changeQty(${item.id}, 1)">+</button>
-                            </div>
-                        </div>
-                        <div class="col-md-2 p-3 text-md-end">
-                            <p class="text-success fw-bold mb-1">Tk ${item.price * item.quantity}</p>
-                            <button class="btn btn-link link-danger p-0 small" onclick="removeItem(${item.id})">Remove</button>
-                        </div>
+                    </div>
+                    <div class="col-auto text-end" style="min-width: 100px;">
+                        <div class="fw-bold mb-1" style="color: var(--accent-cyan);">Tk ${item.price * item.quantity}</div>
+                        <button class="btn btn-link text-danger p-0 small text-decoration-none" onclick="removeItem(${item.id})">Remove</button>
                     </div>
                 </div>
             </div>
@@ -184,7 +211,7 @@
     }
 
     function clearCartUI() {
-        if (confirm('Clear entire cart?')) {
+        if (confirm('Are you sure you want to clear your entire cart?')) {
             saveCart([]);
             renderCart();
         }
@@ -196,7 +223,6 @@
         let discount = 0;
 
         if (currentCoupon) {
-            // Assume coupon reduces a percentage for now
             discount = subtotal * (currentCoupon.Percentage / 100);
         }
 
@@ -221,19 +247,19 @@
         .then(data => {
             if (data.valid) {
                 currentCoupon = data.coupon;
-                msg.className = "small mt-1 text-success";
-                msg.innerText = `Coupon ${code} applied! (${data.coupon.Percentage}% off)`;
+                msg.className = "small mt-2 text-info";
+                msg.innerText = `Coupon Applied: ${data.coupon.Percentage}% discount`;
                 updateSummary();
             } else {
                 currentCoupon = null;
-                msg.className = "small mt-1 text-danger";
+                msg.className = "small mt-2 text-danger";
                 msg.innerText = data.message || "Invalid coupon code";
                 updateSummary();
             }
         })
         .catch(err => {
-            msg.className = "small mt-1 text-danger";
-            msg.innerText = "Error validating coupon";
+            msg.className = "small mt-2 text-danger";
+            msg.innerText = "Validation error";
         });
     }
 
@@ -280,24 +306,24 @@
         .then(res => res.json().then(data => ({ status: res.status, body: data })))
         .then(res => {
             if (res.status === 201) {
-                msg.className = "mt-3 text-center small text-success";
-                msg.innerText = "Order placed successfully! Redirecting...";
-                saveCart([]); // Clear cart
+                msg.className = "mt-3 text-center small text-info";
+                msg.innerText = "Success! Order placed. Redirecting...";
+                saveCart([]);
                 setTimeout(() => {
-                    window.location.href = "/customer/dashboard"; // Usually would go to orders list, but we'll go home for now
-                }, 2000);
+                    window.location.href = "/customer/dashboard";
+                }, 1500);
             } else {
                 btn.disabled = false;
                 btn.innerHTML = "Place Order Now";
                 msg.className = "mt-3 text-center small text-danger";
-                msg.innerText = res.body.message || "Error placing order";
+                msg.innerText = res.body.message || "Order failed";
             }
         })
         .catch(err => {
             btn.disabled = false;
             btn.innerHTML = "Place Order Now";
             msg.className = "mt-3 text-center small text-danger";
-            msg.innerText = "Network error. Please try again.";
+            msg.innerText = "Connection error";
         });
     }
 </script>
