@@ -83,6 +83,7 @@ Route::middleware('auth:employee')->prefix('employee')->group(function () {
 
 // --- Protected Customer Routes ---
 Route::middleware('auth:customer')->prefix('customer')->group(function () {
+    Route::get('/profile', [CustomerController::class, 'getProfile']);
     Route::get('/products', [ProductController::class, 'index']); // reuse public browse
     Route::get('/products/{id}', [ProductController::class, 'show']);
     Route::post('/orders', [CustomerController::class, 'placeOrder']);
