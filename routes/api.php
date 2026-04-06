@@ -33,17 +33,15 @@ Route::middleware('auth:admin')->prefix('admin')->group(function () {
     Route::post('/employees', [AdminController::class, 'addEmployee']);
     Route::delete('/employees/{id}', [AdminController::class, 'deleteEmployee']);
     
-    // Product Management
-    Route::get('/products', [AdminController::class, 'getProducts']);
-    Route::post('/products', [AdminController::class, 'addProduct']);
-    Route::put('/products/{id}', [AdminController::class, 'editProduct']);
-    Route::delete('/products/{id}', [AdminController::class, 'deleteProduct']);
-    Route::post('/offers', [AdminController::class, 'addOffer']);
-    Route::get('/categories', [AdminController::class, 'getCategories']);
+    // Admin management
+    Route::get('/all-admins', [AdminController::class, 'getAdmins']);
+    Route::post('/all-admins', [AdminController::class, 'addAdmin']);
+    Route::delete('/all-admins/{id}', [AdminController::class, 'deleteAdmin']);
 
     Route::get('/dashboard-stats', [AdminController::class, 'dashboardStats']);
     Route::get('/profile', [AdminController::class, 'getProfile']);
-    Route::post('/profile/update', [AdminController::class, 'updateProfile']);
+    Route::put('/profile', [AdminController::class, 'updateProfile']);
+    Route::post('/profile/change-password', [AdminController::class, 'changePassword']);
 });
 
 // --- Protected Employee Routes ---

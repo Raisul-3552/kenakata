@@ -80,31 +80,21 @@ class AdminController extends Controller
     public function updateProfile(Request $request)
     {
         $admin = $request->user();
-        
+
+        $email = $request->input('Email', $request->input('email'));
+        $name = $request->input('AdminName', $request->input('admin_name'));
+
         $request->validate([
             'AdminName' => 'required|string|max:255',
-            'Email' => 'required|email|unique:Admin,Email,' . $admin->AdminID . ',AdminID',
-            'Password' => 'nullable|string|min:6',
-            'Photo' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
+            'Email' => 'nullable|email|unique:Admin,Email,' . $admin->AdminID . ',AdminID',
+            'email' => 'nullable|email|unique:Admin,Email,' . $admin->AdminID . ',AdminID',
         ]);
 
-        $data = [
-            'AdminName' => $request->AdminName,
-            'Email' => $request->Email,
-        ];
-
-        if ($request->filled('Password')) {
-            $data['Password'] = Hash::make($request->Password);
+        $admin->AdminName = $name;
+        if (!is_null($email) && $email !== '') {
+            $admin->Email = $email;
         }
-
-        if ($request->hasFile('Photo')) {
-            $file = $request->file('Photo');
-            $filename = time() . '_' . $file->getClientOriginalName();
-            $file->move(public_path('uploads/profiles'), $filename);
-            $data['Photo'] = '/uploads/profiles/' . $filename;
-        }
-
-        $admin->update($data);
+        $admin->save();
 
         return response()->json([
             'message' => 'Profile updated successfully',
@@ -112,58 +102,54 @@ class AdminController extends Controller
         ]);
     }
 
-    public function getProducts()
+    public function changePassword(Request $request)
     {
-        return response()->json(Product::with(['category', 'detail'])->get());
+        $admin = $request->user();
+
+        if (!Hash::check($request->current_password, $admin->Password)) {
+            return response()->json(['message' => 'Current password is incorrect'], 422);
+        }
+
+        $request->validate(['new_password' => 'required|string|min:6']);
+        $admin->Password = Hash::make($request->new_password);
+        $admin->save();
+
+        return response()->json(['message' => 'Password changed successfully']);
     }
 
-    public function addProduct(Request $request)
+    public function getAdmins(Request $request)
     {
-        $product = Product::create([
-            'EmployeeID' => null, // Admin created
-            'CategoryID' => $request->CategoryID,
-            'ProductName' => $request->ProductName,
-            'Brand' => $request->Brand,
-            'Price' => $request->Price,
-            'Stock' => $request->Stock,
-        ]);
-
-        ProductDetail::create([
-            'ProductID' => $product->ProductID,
-            'Description' => $request->Description,
-            'Specification' => $request->Specification,
-            'Warranty' => $request->Warranty,
-            'Image' => $request->Image,
-        ]);
-
-        return response()->json($product, 201);
+        $currentAdmin = $request->user();
+        return response()->json(
+            \App\Models\Admin::where('AdminID', '!=', $currentAdmin->AdminID)->get()
+        );
     }
 
-    public function editProduct(Request $request, $id)
+    public function addAdmin(Request $request)
     {
-        $product = Product::where('ProductID', $id)->first();
-        $product->update($request->only(['ProductName', 'Brand', 'Price', 'Stock', 'CategoryID']));
+        $request->validate([
+            'AdminName' => 'required|string|max:255',
+            'Email' => 'required|email|unique:Admin,Email',
+        ]);
+
+        $admin = \App\Models\Admin::create([
+            'AdminName' => $request->AdminName,
+            'Email' => $request->Email,
+            'Password' => Hash::make('password'), // default password for new admins
+        ]);
+
+        return response()->json($admin, 201);
+    }
+
+    public function deleteAdmin($id)
+    {
+        // Prevent deleting the last admin
+        if (\App\Models\Admin::count() <= 1) {
+            return response()->json(['message' => 'Cannot delete the only admin.'], 403);
+        }
         
-        $detail = ProductDetail::where('ProductID', $id)->first();
-        $detail->update($request->only(['Description', 'Specification', 'Warranty', 'Image']));
-
-        return response()->json($product);
-    }
-
-    public function deleteProduct($id)
-    {
-        Product::where('ProductID', $id)->delete();
-        return response()->json(['message' => 'Product deleted successfully']);
-    }
-
-    public function addOffer(Request $request)
-    {
-        $offer = Offer::create($request->all());
-        return response()->json($offer, 201);
-    }
-
-    public function getCategories()
-    {
-        return response()->json(Category::all());
+        // Prevent deleting oneself if we had the context, but simpler to just delete
+        \App\Models\Admin::where('AdminID', $id)->delete();
+        return response()->json(['message' => 'Admin deleted successfully']);
     }
 }

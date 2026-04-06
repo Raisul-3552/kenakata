@@ -18,7 +18,13 @@ class EmployeeController extends Controller
 {
     public function getProducts()
     {
-        return response()->json(Product::with(['category', 'detail'])->get());
+        return response()->json(Product::with([
+            'category',
+            'detail',
+            'offers' => function ($query) {
+                $query->orderByDesc('StartDate');
+            },
+        ])->get());
     }
 
     public function addProduct(Request $request)
@@ -62,7 +68,15 @@ class EmployeeController extends Controller
 
     public function addOffer(Request $request)
     {
-        $offer = Offer::create($request->all());
+        $offer = Offer::updateOrCreate(
+            ['ProductID' => $request->ProductID],
+            [
+                'DiscountAmount' => $request->DiscountAmount,
+                'StartDate' => $request->StartDate,
+                'EndDate' => $request->EndDate,
+            ]
+        );
+
         return response()->json($offer, 201);
     }
 
@@ -170,6 +184,29 @@ class EmployeeController extends Controller
     // --- Categories ---
     public function getCategories()
     {
-        return response()->json(Category::all());
+        $defaultCategories = [
+            ['CategoryName' => 'Fruits', 'Description' => 'Fresh seasonal fruits'],
+            ['CategoryName' => 'Vegetables', 'Description' => 'Fresh vegetables and greens'],
+            ['CategoryName' => 'Groceries', 'Description' => 'Rice, pulses, oil and daily essentials'],
+            ['CategoryName' => 'Sanitary Items', 'Description' => 'Hygiene and cleaning products'],
+            ['CategoryName' => 'Home Tools', 'Description' => 'Small home and utility tools'],
+            ['CategoryName' => 'Kitchenware', 'Description' => 'Kitchen and cookware items'],
+            ['CategoryName' => 'Electronics', 'Description' => 'Electronic appliances and accessories'],
+            ['CategoryName' => 'Mobile Devices', 'Description' => 'Phones, tablets and related accessories'],
+            ['CategoryName' => 'Computers', 'Description' => 'Laptops, desktops and computer accessories'],
+        ];
+
+        $existingNames = Category::query()
+            ->pluck('CategoryName')
+            ->map(fn ($name) => strtolower(trim((string) $name)))
+            ->toArray();
+
+        foreach ($defaultCategories as $category) {
+            if (!in_array(strtolower($category['CategoryName']), $existingNames, true)) {
+                Category::create($category);
+            }
+        }
+
+        return response()->json(Category::orderBy('CategoryName')->get());
     }
 }

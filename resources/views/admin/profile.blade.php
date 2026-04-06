@@ -1,101 +1,106 @@
 @extends('layouts.admin')
 
-@section('title', 'Admin Profile')
+@section('title', 'My Profile')
+
+@section('admin_styles')
+<style>
+    .profile-avatar {
+        width: 96px; height: 96px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #28a745, #20c997);
+        display: flex; align-items: center; justify-content: center;
+        font-size: 2.5rem; font-weight: 700; color: #fff;
+        flex-shrink: 0;
+        box-shadow: 0 0 0 4px rgba(40,167,69,0.25);
+    }
+    .section-card {
+        background: rgba(22, 33, 62, 0.85) !important;
+        border: 1px solid rgba(255,255,255,0.1) !important;
+        border-radius: 16px;
+    }
+    .section-title {
+        font-size: 1rem; font-weight: 700; letter-spacing: 0.04em;
+        color: #2ecc71; text-transform: uppercase;
+        border-bottom: 1px solid rgba(40,167,69,0.25);
+        padding-bottom: 0.5rem; margin-bottom: 1.25rem;
+    }
+    .info-row { display: flex; gap: 0.5rem; align-items: start; margin-bottom: 0.9rem; }
+    .info-label { min-width: 110px; color: rgba(255,255,255,0.5); font-size: 0.82rem; padding-top: 0.35rem; font-weight:600;}
+    .info-value { color: #fff; font-weight: 500; flex: 1; }
+    .badge-role {
+        background: linear-gradient(135deg,#0f3460,#28a745);
+        font-size: 0.75rem; padding: 0.3em 0.75em; border-radius: 20px;
+    }
+</style>
+@endsection
 
 @section('admin_content')
+<div id="profile-alert"></div>
+
 <div class="row g-4">
-    <div class="col-md-4">
-        <!-- Profile Card -->
-        <div class="card mb-4 border-0 shadow-sm">
-            <div class="card-body text-center py-5">
-                <div class="position-relative d-inline-block mb-4">
-                    <div class="rounded-circle overflow-hidden border border-4 border-light shadow-sm" style="width: 150px; height: 150px; margin: 0 auto;">
-                        <img id="profile-preview" src="https://via.placeholder.com/150" class="w-100 h-100" alt="Profile" style="object-fit: cover;">
-                    </div>
-                </div>
-                <h3 id="display-name" class="fw-bold text-navy mb-1">Admin Name</h3>
-                <p id="display-email" class="text-muted mb-3">admin@email.com</p>
-                <div class="d-inline-block bg-navy bg-opacity-10 text-navy px-4 py-2 rounded-pill fw-bold small">
-                    <i class="bi bi-shield-check me-2"></i>Administrator
+    {{-- Left: Info card --}}
+    <div class="col-lg-4">
+        <div class="card section-card p-4 h-100">
+            <div class="d-flex gap-3 align-items-center mb-4">
+                <div class="profile-avatar" id="avatar-initials">?</div>
+                <div>
+                    <h5 class="mb-1 fw-bold" id="profile-name">Loading...</h5>
+                    <span class="badge badge-role text-white">🛡️ Admin</span>
                 </div>
             </div>
-        </div>
-
-        <!-- Assigned Employees Stats -->
-        <div class="card border-0 shadow-sm bg-navy text-white text-center py-4">
-            <div class="card-body">
-                <p class="text-uppercase small fw-bold mb-2 opacity-75">Employees Assigned</p>
-                <h1 id="employee-count" class="display-4 fw-bold mb-0">0</h1>
+            <div class="section-title">Account Info</div>
+            <div class="info-row">
+                <span class="info-label">📧 Email</span>
+                <span class="info-value" id="profile-email">—</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">🆔 Admin ID</span>
+                <span class="info-value" id="profile-id">—</span>
             </div>
         </div>
     </div>
 
-    <div class="col-md-8">
-        <div id="alert-messages"></div>
-        
-        <div class="card border-0 shadow-sm mb-4">
-            <div class="card-header bg-transparent border-bottom border-light py-3">
-                <h5 class="mb-0 fw-bold text-navy"><i class="bi bi-person-gear me-2"></i>Account Management</h5>
-            </div>
-            <div class="card-body p-4">
-                <form id="updateProfileForm">
-                    <div class="row g-4 mb-4">
-                        <div class="col-md-6">
-                            <label class="form-label text-navy small fw-bold">Display Name</label>
-                            <input type="text" class="form-control" id="profile_name" name="AdminName" placeholder="Full Name" required>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label text-navy small fw-bold">Email Address</label>
-                            <input type="email" class="form-control" id="profile_email" name="Email" placeholder="admin@example.com" required>
-                        </div>
+    {{-- Right: Edit form + Password --}}
+    <div class="col-lg-8">
+        {{-- Edit Profile --}}
+        <div class="card section-card p-4 mb-4">
+            <div class="section-title">✏️ Edit Profile</div>
+            <form id="edit-profile-form">
+                <div class="row g-3">
+                    <div class="col-12">
+                        <label class="form-label text-white-50 small fw-bold">Full Name</label>
+                        <input type="text" class="form-control" id="edit-name" placeholder="Admin Name" required>
                     </div>
-                    <div class="mb-4">
-                        <label class="form-label text-navy small fw-bold">Update Profile Photo</label>
-                        <input type="file" class="form-control" id="profile_photo" name="Photo" accept="image/*">
-                        <div class="form-text mt-2">Select a clean, professional image (JPG/PNG).</div>
-                    </div>
-                    
-                    <div class="mb-5">
-                        <label class="form-label text-navy small fw-bold text-uppercase border-bottom pb-2 d-block mb-3">Login Security</label>
-                        <div class="row">
-                            <div class="col-md-12">
-                                <label class="form-label small fw-semibold text-muted">New Password</label>
-                                <input type="password" class="form-control" id="profile_password" name="Password" placeholder="Enter new password (min. 6 characters)">
-                                <div class="form-text">Leave blank to keep your current password.</div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="d-grid shadow-sm">
-                        <button type="submit" class="btn btn-navy py-3 fw-bold text-uppercase">
-                            <i class="bi bi-cloud-arrow-up me-2"></i> Update Admin Settings
-                        </button>
-                    </div>
-                </form>
-            </div>
+                </div>
+                <div class="mt-3 d-flex gap-2">
+                    <button type="submit" class="btn btn-navy px-4">💾 Save Changes</button>
+                    <button type="button" class="btn btn-outline-light px-4" onclick="loadProfile()">↺ Reset</button>
+                </div>
+            </form>
         </div>
 
-        <!-- Assigned Employees Table -->
-        <div class="card border-0 shadow-sm">
-            <div class="card-header bg-transparent border-bottom border-light py-3">
-                <h5 class="mb-0 fw-bold text-navy">Recently Assigned Personnel</h5>
-            </div>
-            <div class="card-body p-0">
-                <div class="table-responsive">
-                    <table class="table table-hover align-middle mb-0">
-                        <thead class="bg-light text-muted small text-uppercase">
-                            <tr>
-                                <th class="ps-4">ID</th>
-                                <th>Name</th>
-                                <th>Email</th>
-                                <th class="pe-4">Contact</th>
-                            </tr>
-                        </thead>
-                        <tbody id="assigned-employees-list" class="small">
-                            <!-- JS content -->
-                        </tbody>
-                    </table>
+        {{-- Change Password --}}
+        <div class="card section-card p-4">
+            <div class="section-title">🔒 Change Password</div>
+            <form id="change-password-form">
+                <div class="row g-3">
+                    <div class="col-12">
+                        <label class="form-label text-white-50 small fw-bold">Current Password</label>
+                        <input type="password" class="form-control" id="current-password" placeholder="Enter your current password" required>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label text-white-50 small fw-bold">New Password</label>
+                        <input type="password" class="form-control" id="new-password" placeholder="Min. 6 characters" required>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label text-white-50 small fw-bold">Confirm New Password</label>
+                        <input type="password" class="form-control" id="confirm-password" placeholder="Repeat new password" required>
+                    </div>
                 </div>
-            </div>
+                <div class="mt-3">
+                    <button type="submit" class="btn btn-warning text-dark fw-bold px-4">🔑 Change Password</button>
+                </div>
+            </form>
         </div>
     </div>
 </div>
@@ -103,83 +108,106 @@
 
 @section('scripts')
 <script>
-    document.addEventListener('DOMContentLoaded', () => {
-        loadProfileData();
-    });
+document.addEventListener('DOMContentLoaded', () => {
+    loadProfile();
+    document.getElementById('edit-profile-form').addEventListener('submit', saveProfile);
+    document.getElementById('change-password-form').addEventListener('submit', changePassword);
+});
 
-    function loadProfileData() {
-        const alertDiv = document.getElementById('alert-messages');
+function loadProfile() {
+    fetch(`${API_URL}/admin/profile`, { headers: getHeaders() })
+    .then(r => { if (r.status === 401) { logout(); } return r.json(); })
+    .then(data => {
+        const adminData = data.admin || data;
+        localStorage.setItem('kenakata_user', JSON.stringify(adminData));
 
-        fetch(`${API_URL}/admin/profile`, {
-            headers: getHeaders()
+        document.getElementById('profile-name').textContent   = adminData.AdminName || '—';
+        document.getElementById('profile-email').textContent  = adminData.Email || '—';
+        document.getElementById('profile-id').textContent     = '#ADM-' + (adminData.AdminID || '?');
+
+        // Edit form pre-fill
+        document.getElementById('edit-name').value    = adminData.AdminName || '';
+
+        // Avatar initials
+        const initials = (adminData.AdminName || 'A').split(' ').map(w => w[0]).join('').toUpperCase().substring(0, 2);
+        document.getElementById('avatar-initials').textContent = initials;
+
+        // Navbar name
+        const navEl = document.getElementById('nav-admin-name');
+        if (navEl) navEl.textContent = '👋 ' + adminData.AdminName;
+    })
+    .catch(() => showAlert('Failed to load profile', 'danger'));
+}
+
+function saveProfile(e) {
+    e.preventDefault();
+    const btn = e.submitter || e.target.querySelector('[type=submit]');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Saving...';
+
+    fetch(`${API_URL}/admin/profile`, {
+        method: 'PUT',
+        headers: getHeaders(),
+        body: JSON.stringify({
+            AdminName: document.getElementById('edit-name').value,
         })
-        .then(res => res.json())
-        .then(data => {
-            const admin = data.admin;
-            const employees = data.employees;
+    })
+    .then(r => r.json().then(data => ({ status: r.status, body: data })))
+    .then(res => {
+        if(res.status === 200) {
+            showAlert(res.body.message || 'Profile updated!', 'success');
+            loadProfile();
+        } else {
+            const errors = res.body.errors ? Object.values(res.body.errors).flat().join('<br>') : res.body.message;
+            showAlert(errors, 'danger');
+        }
+    })
+    .catch(() => showAlert('Failed to update profile', 'danger'))
+    .finally(() => { btn.disabled = false; btn.innerHTML = '💾 Save Changes'; });
+}
 
-            // Fill form
-            document.getElementById('profile_name').value = admin.AdminName;
-            document.getElementById('profile_email').value = admin.Email;
-            
-            // Fill display
-            document.getElementById('display-name').textContent = admin.AdminName;
-            document.getElementById('display-email').textContent = admin.Email;
-            
-            if(admin.Photo) {
-                document.getElementById('profile-preview').src = admin.Photo;
-            }
+function changePassword(e) {
+    e.preventDefault();
+    const np  = document.getElementById('new-password').value;
+    const cnp = document.getElementById('confirm-password').value;
 
-            // Fill employees
-            document.getElementById('employee-count').textContent = employees.length;
-            const tbody = document.getElementById('assigned-employees-list');
-            
-            if(employees.length > 0) {
-                tbody.innerHTML = employees.map(emp => `
-                    <tr>
-                        <td><strong>#${emp.EmployeeID}</strong></td>
-                        <td>${emp.EmployeeName}</td>
-                        <td>${emp.Email}</td>
-                        <td>${emp.Phone || 'N/A'}</td>
-                    </tr>
-                `).join('');
-            } else {
-                tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-4">No employees assigned yet.</td></tr>';
-            }
+    if (np !== cnp) { showAlert('New passwords do not match!', 'warning'); return; }
+    if (np.length < 6) { showAlert('New password must be at least 6 characters', 'warning'); return; }
+
+    const btn = e.submitter || e.target.querySelector('[type=submit]');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Changing...';
+
+    fetch(`${API_URL}/admin/profile/change-password`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({
+            current_password: document.getElementById('current-password').value,
+            new_password: np,
         })
-        .catch(err => {
-            alertDiv.innerHTML = `<div class="alert alert-danger">Failed to load profile data.</div>`;
-        });
-    }
+    })
+    .then(r => r.json().then(data => ({ status: r.status, body: data })))
+    .then(res => {
+        if (res.status === 422) {
+            showAlert('⚠️ ' + (res.body.message || 'Current password is incorrect'), 'danger');
+        } else if (res.status === 200) {
+            showAlert('✅ ' + (res.body.message || 'Password changed!'), 'success');
+            e.target.reset();
+        } else {
+            showAlert('Failed to change password', 'danger');
+        }
+    })
+    .catch(() => showAlert('Failed to change password', 'danger'))
+    .finally(() => { btn.disabled = false; btn.innerHTML = '🔑 Change Password'; });
+}
 
-    document.getElementById('updateProfileForm').addEventListener('submit', function(e) {
-        e.preventDefault();
-        const alertDiv = document.getElementById('alert-messages');
-        const formData = new FormData(this);
-
-        // API call
-        fetch(`${API_URL}/admin/profile/update`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${localStorage.getItem('kenakata_token')}`,
-                'Accept': 'application/json'
-            },
-            body: formData
-        })
-        .then(res => res.json().then(data => ({ status: res.status, body: data })))
-        .then(res => {
-            if(res.status === 200) {
-                alertDiv.innerHTML = `<div class="alert alert-success">✅ ${res.body.message}</div>`;
-                loadProfileData(); // Reload to update photo and text
-                this.reset();
-            } else {
-                const errors = res.body.errors ? Object.values(res.body.errors).flat().join('<br>') : res.body.message;
-                alertDiv.innerHTML = `<div class="alert alert-danger">${errors}</div>`;
-            }
-        })
-        .catch(err => {
-            alertDiv.innerHTML = `<div class="alert alert-danger">Network error.</div>`;
-        });
-    });
+function showAlert(msg, type) {
+    const el = document.getElementById('profile-alert');
+    el.innerHTML = `<div class="alert alert-${type} alert-dismissible fade show shadow-sm" role="alert">
+        ${msg}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>`;
+    setTimeout(() => { el.innerHTML = ''; }, 5000);
+}
 </script>
 @endsection
