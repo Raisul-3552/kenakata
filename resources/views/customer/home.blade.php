@@ -106,6 +106,42 @@
 <script>
     document.addEventListener('DOMContentLoaded', loadProducts);
 
+    function formatDetailLabel(key) {
+        const normalized = key.toLowerCase();
+        const knownLabels = {
+            specification: 'Specification',
+            warranty: 'Warranty',
+            warrenty: 'Warranty',
+            warenty: 'Warranty',
+            description: 'Description',
+            brand: 'Brand',
+            model: 'Model',
+            color: 'Color',
+            weight: 'Weight',
+            size: 'Size'
+        };
+
+        if (knownLabels[normalized]) return knownLabels[normalized];
+
+        return key
+            .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+            .replace(/[_-]+/g, ' ')
+            .replace(/\b\w/g, ch => ch.toUpperCase())
+            .trim();
+    }
+
+    function renderDetailAttributes(detail) {
+        const excludedKeys = ['productid', 'description', 'image'];
+
+        return Object.entries(detail)
+            .filter(([key, value]) => !excludedKeys.includes(key.toLowerCase()) && value)
+            .map(([key, value]) => {
+                const label = formatDetailLabel(key);
+                return `<div class="detail-item mb-1"><span class="text-info">●</span> <span><strong>${label}:</strong> ${value}</span></div>`;
+            })
+            .join('');
+    }
+
     function getActiveOffer(offers) {
         if (!offers || offers.length === 0) return null;
         const today = new Date().toISOString().split('T')[0];
@@ -158,8 +194,7 @@
 
                             <div class="mb-4">
                                 <p class="text-muted small mb-3">${detail.Description || 'High quality product from Kenakata.'}</p>
-                                ${detail.Specification ? `<div class="detail-item mb-1"><span class="text-info">●</span> ${detail.Specification}</div>` : ''}
-                                ${detail.Warranty ? `<div class="detail-item"><span class="text-warning">●</span> ${detail.Warranty}</div>` : ''}
+                                ${renderDetailAttributes(detail)}
                             </div>
 
                             <div class="mt-auto pt-3 border-top border-secondary border-opacity-25">
