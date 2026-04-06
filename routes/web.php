@@ -26,6 +26,15 @@ Route::get('/admin/profile', function () {
 Route::get('/employee/dashboard', function () {
     return view('employee.dashboard');
 });
+Route::get('/employee/profile', function () {
+    return view('employee.profile');
+});
+Route::get('/employee/products', function () {
+    return view('employee.products');
+});
+Route::get('/employee/coupons', function () {
+    return view('employee.coupons');
+});
 
 // Customer
 Route::get('/customer/dashboard', function () {

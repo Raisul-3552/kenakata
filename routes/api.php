@@ -39,20 +39,37 @@ Route::middleware('auth:admin')->prefix('admin')->group(function () {
 
 // --- Protected Employee Routes ---
 Route::middleware('auth:employee')->prefix('employee')->group(function () {
+    // Profile
+    Route::get('/profile', [EmployeeController::class, 'getProfile']);
+    Route::put('/profile', [EmployeeController::class, 'updateProfile']);
+    Route::post('/profile/change-password', [EmployeeController::class, 'changePassword']);
+
+    // Delivery
     Route::get('/deliverymen/available', [EmployeeController::class, 'getAvailableDeliveryMen']);
     Route::get('/deliverymen/all', [EmployeeController::class, 'getAllDeliveryMenStatus']);
     Route::get('/products', [EmployeeController::class, 'getProducts']);
     Route::post('/products', [EmployeeController::class, 'addProduct']);
     Route::put('/products/{id}', [EmployeeController::class, 'editProduct']);
     Route::delete('/products/{id}', [EmployeeController::class, 'deleteProduct']);
-    
+
+    // Offers
+    Route::get('/offers', [EmployeeController::class, 'getOffers']);
     Route::post('/offers', [EmployeeController::class, 'addOffer']);
+    Route::delete('/offers/{id}', [EmployeeController::class, 'deleteOffer']);
+
+    // Coupons
+    Route::get('/coupons', [EmployeeController::class, 'getCoupons']);
     Route::post('/coupons', [EmployeeController::class, 'addCoupon']);
-    
+    Route::delete('/coupons/{id}', [EmployeeController::class, 'deleteCoupon']);
+
+    // Orders
     Route::get('/orders', [EmployeeController::class, 'getOrders']);
     Route::post('/orders/{id}/confirm', [EmployeeController::class, 'confirmOrder']);
     Route::post('/orders/{id}/cancel', [EmployeeController::class, 'cancelOrder']);
     Route::post('/orders/{id}/assign-delivery', [EmployeeController::class, 'assignDelivery']);
+
+    // Categories (for dropdowns)
+    Route::get('/categories', [EmployeeController::class, 'getCategories']);
 });
 
 // --- Protected Customer Routes ---

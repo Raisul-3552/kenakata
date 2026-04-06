@@ -8,9 +8,11 @@ use App\Models\ProductDetail;
 use App\Models\Offer;
 use App\Models\Coupon;
 use App\Models\Order;
+use App\Models\Category;
 use App\Models\DeliveryMan;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 
 class EmployeeController extends Controller
 {
@@ -111,5 +113,63 @@ class EmployeeController extends Controller
         DeliveryMan::where('DelManID', $request->DelManID)->update(['Status' => 'Busy']);
         
         return response()->json(['message' => 'Delivery assigned successfully']);
+    }
+
+    // --- Profile ---
+    public function getProfile(Request $request)
+    {
+        return response()->json($request->user());
+    }
+
+    public function updateProfile(Request $request)
+    {
+        $employee = $request->user();
+        $employee->update($request->only(['EmployeeName', 'Phone', 'Address']));
+        return response()->json(['message' => 'Profile updated successfully', 'employee' => $employee]);
+    }
+
+    public function changePassword(Request $request)
+    {
+        $employee = $request->user();
+
+        if (!Hash::check($request->current_password, $employee->Password)) {
+            return response()->json(['message' => 'Current password is incorrect'], 422);
+        }
+
+        $request->validate(['new_password' => 'required|string|min:6']);
+        $employee->Password = Hash::make($request->new_password);
+        $employee->save();
+
+        return response()->json(['message' => 'Password changed successfully']);
+    }
+
+    // --- Offers ---
+    public function getOffers()
+    {
+        return response()->json(Offer::with('product')->get());
+    }
+
+    public function deleteOffer($id)
+    {
+        Offer::where('OfferID', $id)->delete();
+        return response()->json(['message' => 'Offer removed successfully']);
+    }
+
+    // --- Coupons ---
+    public function getCoupons()
+    {
+        return response()->json(Coupon::all());
+    }
+
+    public function deleteCoupon($id)
+    {
+        Coupon::where('CouponID', $id)->delete();
+        return response()->json(['message' => 'Coupon deleted successfully']);
+    }
+
+    // --- Categories ---
+    public function getCategories()
+    {
+        return response()->json(Category::all());
     }
 }
