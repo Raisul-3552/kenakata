@@ -37,6 +37,9 @@ Route::get('/employee/coupons', function () {
 Route::get('/customer/dashboard', function () {
     return view('customer.home');
 });
+Route::get('/customer/profile', function () {
+    return view('customer.profile');
+});
 Route::get('/customer/cart', function () {
     return view('customer.cart');
 });
