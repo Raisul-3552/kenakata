@@ -3,25 +3,29 @@
 @section('title', 'Admin Profile')
 
 @section('admin_content')
-<div class="row">
+<div class="row g-4">
     <div class="col-md-4">
         <!-- Profile Card -->
-        <div class="card mb-4 shadow-sm border-0">
-            <div class="card-body text-center">
-                <div class="position-relative d-inline-block mb-3">
-                    <img id="profile-preview" src="https://via.placeholder.com/150" class="rounded-circle border" alt="Profile" style="width: 150px; height: 150px; object-fit: cover;">
+        <div class="card mb-4 border-0 shadow-sm">
+            <div class="card-body text-center py-5">
+                <div class="position-relative d-inline-block mb-4">
+                    <div class="rounded-circle overflow-hidden border border-4 border-light shadow-sm" style="width: 150px; height: 150px; margin: 0 auto;">
+                        <img id="profile-preview" src="https://via.placeholder.com/150" class="w-100 h-100" alt="Profile" style="object-fit: cover;">
+                    </div>
                 </div>
-                <h4 id="display-name" class="fw-bold">Admin Name</h4>
-                <p id="display-email" class="text-muted">admin@email.com</p>
-                <span class="badge bg-primary px-3 py-2">Administrator</span>
+                <h3 id="display-name" class="fw-bold text-navy mb-1">Admin Name</h3>
+                <p id="display-email" class="text-muted mb-3">admin@email.com</p>
+                <div class="d-inline-block bg-navy bg-opacity-10 text-navy px-4 py-2 rounded-pill fw-bold small">
+                    <i class="bi bi-shield-check me-2"></i>Administrator
+                </div>
             </div>
         </div>
 
         <!-- Assigned Employees Stats -->
-        <div class="card shadow-sm border-0 bg-success text-white">
-            <div class="card-body text-center">
-                <h5 class="mb-0">Assigned Employees</h5>
-                <h2 id="employee-count" class="display-4 fw-bold mb-0">0</h2>
+        <div class="card border-0 shadow-sm bg-navy text-white text-center py-4">
+            <div class="card-body">
+                <p class="text-uppercase small fw-bold mb-2 opacity-75">Employees Assigned</p>
+                <h1 id="employee-count" class="display-4 fw-bold mb-0">0</h1>
             </div>
         </div>
     </div>
@@ -29,53 +33,64 @@
     <div class="col-md-8">
         <div id="alert-messages"></div>
         
-        <div class="card shadow-sm border-0 mb-4">
-            <div class="card-header bg-white py-3">
-                <h5 class="mb-0">Account Settings</h5>
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-header bg-transparent border-bottom border-light py-3">
+                <h5 class="mb-0 fw-bold text-navy"><i class="bi bi-person-gear me-2"></i>Account Management</h5>
             </div>
-            <div class="card-body">
+            <div class="card-body p-4">
                 <form id="updateProfileForm">
-                    <div class="mb-3">
-                        <label class="form-label">Full Name</label>
-                        <input type="text" class="form-control" id="profile_name" name="AdminName" required>
+                    <div class="row g-4 mb-4">
+                        <div class="col-md-6">
+                            <label class="form-label text-navy small fw-bold">Display Name</label>
+                            <input type="text" class="form-control" id="profile_name" name="AdminName" placeholder="Full Name" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label text-navy small fw-bold">Email Address</label>
+                            <input type="email" class="form-control" id="profile_email" name="Email" placeholder="admin@example.com" required>
+                        </div>
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label">Email Address</label>
-                        <input type="email" class="form-control" id="profile_email" name="Email" required>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Profile Photo</label>
+                    <div class="mb-4">
+                        <label class="form-label text-navy small fw-bold">Update Profile Photo</label>
                         <input type="file" class="form-control" id="profile_photo" name="Photo" accept="image/*">
-                        <div class="form-text text-muted">Leave empty to keep current photo.</div>
+                        <div class="form-text mt-2">Select a clean, professional image (JPG/PNG).</div>
                     </div>
-                    <hr>
-                    <div class="mb-3">
-                        <label class="form-label">New Password</label>
-                        <input type="password" class="form-control" id="profile_password" name="Password" placeholder="Minimum 6 characters">
-                        <div class="form-text text-muted">Leave empty to keep current password.</div>
+                    
+                    <div class="mb-5">
+                        <label class="form-label text-navy small fw-bold text-uppercase border-bottom pb-2 d-block mb-3">Login Security</label>
+                        <div class="row">
+                            <div class="col-md-12">
+                                <label class="form-label small fw-semibold text-muted">New Password</label>
+                                <input type="password" class="form-control" id="profile_password" name="Password" placeholder="Enter new password (min. 6 characters)">
+                                <div class="form-text">Leave blank to keep your current password.</div>
+                            </div>
+                        </div>
                     </div>
-                    <button type="submit" class="btn btn-success px-4">Update Profile</button>
+                    <div class="d-grid shadow-sm">
+                        <button type="submit" class="btn btn-navy py-3 fw-bold text-uppercase">
+                            <i class="bi bi-cloud-arrow-up me-2"></i> Update Admin Settings
+                        </button>
+                    </div>
                 </form>
             </div>
         </div>
 
         <!-- Assigned Employees Table -->
-        <div class="card shadow-sm border-0">
-            <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">Employees You've Assigned</h5>
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-transparent border-bottom border-light py-3">
+                <h5 class="mb-0 fw-bold text-navy">Recently Assigned Personnel</h5>
             </div>
-            <div class="card-body">
+            <div class="card-body p-0">
                 <div class="table-responsive">
-                    <table class="table table-hover align-middle">
-                        <thead class="table-light text-muted small text-uppercase">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="bg-light text-muted small text-uppercase">
                             <tr>
-                                <th>ID</th>
+                                <th class="ps-4">ID</th>
                                 <th>Name</th>
                                 <th>Email</th>
-                                <th>Phone</th>
+                                <th class="pe-4">Contact</th>
                             </tr>
                         </thead>
-                        <tbody id="assigned-employees-list">
+                        <tbody id="assigned-employees-list" class="small">
                             <!-- JS content -->
                         </tbody>
                     </table>

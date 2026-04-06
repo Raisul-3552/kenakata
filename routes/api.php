@@ -32,6 +32,15 @@ Route::middleware('auth:admin')->prefix('admin')->group(function () {
     Route::get('/customers/search', [AdminController::class, 'searchCustomers']);
     Route::post('/employees', [AdminController::class, 'addEmployee']);
     Route::delete('/employees/{id}', [AdminController::class, 'deleteEmployee']);
+    
+    // Product Management
+    Route::get('/products', [AdminController::class, 'getProducts']);
+    Route::post('/products', [AdminController::class, 'addProduct']);
+    Route::put('/products/{id}', [AdminController::class, 'editProduct']);
+    Route::delete('/products/{id}', [AdminController::class, 'deleteProduct']);
+    Route::post('/offers', [AdminController::class, 'addOffer']);
+    Route::get('/categories', [AdminController::class, 'getCategories']);
+
     Route::get('/dashboard-stats', [AdminController::class, 'dashboardStats']);
     Route::get('/profile', [AdminController::class, 'getProfile']);
     Route::post('/profile/update', [AdminController::class, 'updateProfile']);
