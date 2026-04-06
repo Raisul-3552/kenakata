@@ -16,6 +16,8 @@ use App\Http\Controllers\Api\DeliveryController;
 */
 
 // --- Public Routes ---
+Route::post('/login', [AuthController::class, 'login']);
+Route::post('/register', [AuthController::class, 'register']);
 Route::post('/admin/login', [AuthController::class, 'adminLogin']);
 Route::post('/employee/login', [AuthController::class, 'employeeLogin']);
 Route::post('/customer/login', [AuthController::class, 'customerLogin']);

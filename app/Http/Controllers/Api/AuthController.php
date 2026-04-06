@@ -3,48 +3,58 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\Admin;
-use App\Models\Employee;
 use App\Models\Customer;
 use App\Models\DeliveryMan;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
+use App\Http\Controllers\Api\Concerns\InteractsWithAccountEmails;
 
 class AuthController extends Controller
 {
+    use InteractsWithAccountEmails;
+
     public function adminLogin(Request $request)
     {
-        return $this->login($request, Admin::class, 'admin-token');
+        return $this->login($request);
     }
 
     public function employeeLogin(Request $request)
     {
-        return $this->login($request, Employee::class, 'employee-token');
+        return $this->login($request);
     }
 
     public function customerLogin(Request $request)
     {
-        return $this->login($request, Customer::class, 'customer-token');
+        return $this->login($request);
     }
 
     public function deliveryManLogin(Request $request)
     {
-        return $this->login($request, DeliveryMan::class, 'deliveryman-token');
+        return $this->login($request);
     }
 
     public function customerRegister(Request $request)
     {
+        return $this->register($request);
+    }
+
+    public function register(Request $request)
+    {
         $validator = Validator::make($request->all(), [
             'CustomerName' => 'required|string|max:255',
             'Phone' => 'required|string|max:20',
-            'Email' => 'required|string|email|max:255|unique:Customer',
+            'Email' => 'required|string|email|max:255',
             'Password' => 'required|string|min:6',
             'Address' => 'required|string',
         ]);
 
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        if ($this->emailExistsAcrossAccounts($request->Email)) {
+            return response()->json(['errors' => ['Email' => ['This email is already registered.']]], 422);
         }
 
         $customer = Customer::create([
@@ -70,13 +80,17 @@ class AuthController extends Controller
         $validator = Validator::make($request->all(), [
             'DelManName' => 'required|string|max:255',
             'Phone' => 'required|string|max:20',
-            'Email' => 'required|string|email|max:255|unique:DeliveryMan',
+            'Email' => 'required|string|email|max:255',
             'Password' => 'required|string|min:6',
             'Address' => 'required|string',
         ]);
 
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        if ($this->emailExistsAcrossAccounts($request->Email)) {
+            return response()->json(['errors' => ['Email' => ['This email is already registered.']]], 422);
         }
 
         $deliveryMan = DeliveryMan::create([
@@ -98,26 +112,27 @@ class AuthController extends Controller
         ], 201);
     }
 
-    private function login(Request $request, $modelClass, $tokenName)
+    public function login(Request $request)
     {
         $request->validate([
             'Email' => 'required|email',
             'Password' => 'required',
         ]);
 
-        $user = $modelClass::where('Email', $request->Email)->first();
+        $account = $this->findAccountByEmail($request->Email);
+        $user = $account['user'] ?? null;
 
         if (!$user || !Hash::check($request->Password, $user->Password)) {
             return response()->json(['message' => 'Invalid credentials'], 401);
         }
 
-        $token = $user->createToken($tokenName)->plainTextToken;
+        $token = $user->createToken($account['token'])->plainTextToken;
 
         return response()->json([
             'message' => 'Login successful',
             'token' => $token,
             'user' => $user,
-            'role' => strtolower(class_basename($modelClass))
+            'role' => $account['role'],
         ]);
     }
     
