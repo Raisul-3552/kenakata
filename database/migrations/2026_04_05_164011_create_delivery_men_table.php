@@ -15,6 +15,7 @@ class CreateDeliveryMenTable extends Migration
             $table->string('Email')->unique();
             $table->string('Password');
             $table->text('Address');
+            $table->string('Status', 20)->default('Available');
         });
     }
 
