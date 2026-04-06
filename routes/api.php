@@ -32,9 +32,16 @@ Route::middleware('auth:admin')->prefix('admin')->group(function () {
     Route::get('/customers/search', [AdminController::class, 'searchCustomers']);
     Route::post('/employees', [AdminController::class, 'addEmployee']);
     Route::delete('/employees/{id}', [AdminController::class, 'deleteEmployee']);
+    
+    // Admin management
+    Route::get('/all-admins', [AdminController::class, 'getAdmins']);
+    Route::post('/all-admins', [AdminController::class, 'addAdmin']);
+    Route::delete('/all-admins/{id}', [AdminController::class, 'deleteAdmin']);
+
     Route::get('/dashboard-stats', [AdminController::class, 'dashboardStats']);
     Route::get('/profile', [AdminController::class, 'getProfile']);
-    Route::post('/profile/update', [AdminController::class, 'updateProfile']);
+    Route::put('/profile', [AdminController::class, 'updateProfile']);
+    Route::post('/profile/change-password', [AdminController::class, 'changePassword']);
 });
 
 // --- Protected Employee Routes ---

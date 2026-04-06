@@ -5,6 +5,10 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Employee;
 use App\Models\Customer;
+use App\Models\Product;
+use App\Models\ProductDetail;
+use App\Models\Offer;
+use App\Models\Category;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
@@ -76,35 +80,76 @@ class AdminController extends Controller
     public function updateProfile(Request $request)
     {
         $admin = $request->user();
-        
+
+        $email = $request->input('Email', $request->input('email'));
+        $name = $request->input('AdminName', $request->input('admin_name'));
+
         $request->validate([
             'AdminName' => 'required|string|max:255',
-            'Email' => 'required|email|unique:Admin,Email,' . $admin->AdminID . ',AdminID',
-            'Password' => 'nullable|string|min:6',
-            'Photo' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
+            'Email' => 'nullable|email|unique:Admin,Email,' . $admin->AdminID . ',AdminID',
+            'email' => 'nullable|email|unique:Admin,Email,' . $admin->AdminID . ',AdminID',
         ]);
 
-        $data = [
-            'AdminName' => $request->AdminName,
-            'Email' => $request->Email,
-        ];
-
-        if ($request->filled('Password')) {
-            $data['Password'] = Hash::make($request->Password);
+        $admin->AdminName = $name;
+        if (!is_null($email) && $email !== '') {
+            $admin->Email = $email;
         }
-
-        if ($request->hasFile('Photo')) {
-            $file = $request->file('Photo');
-            $filename = time() . '_' . $file->getClientOriginalName();
-            $file->move(public_path('uploads/profiles'), $filename);
-            $data['Photo'] = '/uploads/profiles/' . $filename;
-        }
-
-        $admin->update($data);
+        $admin->save();
 
         return response()->json([
             'message' => 'Profile updated successfully',
             'admin' => $admin,
         ]);
+    }
+
+    public function changePassword(Request $request)
+    {
+        $admin = $request->user();
+
+        if (!Hash::check($request->current_password, $admin->Password)) {
+            return response()->json(['message' => 'Current password is incorrect'], 422);
+        }
+
+        $request->validate(['new_password' => 'required|string|min:6']);
+        $admin->Password = Hash::make($request->new_password);
+        $admin->save();
+
+        return response()->json(['message' => 'Password changed successfully']);
+    }
+
+    public function getAdmins(Request $request)
+    {
+        $currentAdmin = $request->user();
+        return response()->json(
+            \App\Models\Admin::where('AdminID', '!=', $currentAdmin->AdminID)->get()
+        );
+    }
+
+    public function addAdmin(Request $request)
+    {
+        $request->validate([
+            'AdminName' => 'required|string|max:255',
+            'Email' => 'required|email|unique:Admin,Email',
+        ]);
+
+        $admin = \App\Models\Admin::create([
+            'AdminName' => $request->AdminName,
+            'Email' => $request->Email,
+            'Password' => Hash::make('password'), // default password for new admins
+        ]);
+
+        return response()->json($admin, 201);
+    }
+
+    public function deleteAdmin($id)
+    {
+        // Prevent deleting the last admin
+        if (\App\Models\Admin::count() <= 1) {
+            return response()->json(['message' => 'Cannot delete the only admin.'], 403);
+        }
+        
+        // Prevent deleting oneself if we had the context, but simpler to just delete
+        \App\Models\Admin::where('AdminID', $id)->delete();
+        return response()->json(['message' => 'Admin deleted successfully']);
     }
 }

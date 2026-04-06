@@ -21,6 +21,9 @@ Route::get('/admin/dashboard', function () {
 Route::get('/admin/profile', function () {
     return view('admin.profile');
 });
+Route::get('/admin/admins', function () {
+    return view('admin.admins');
+});
 
 // Employee
 Route::get('/employee/dashboard', function () {
