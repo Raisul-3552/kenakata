@@ -10,12 +10,22 @@ use App\Models\Coupon;
 use App\Models\Order;
 use App\Models\Category;
 use App\Models\DeliveryMan;
+use App\Models\Wallet;
+use App\Models\WalletTransaction;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 
 class EmployeeController extends Controller
 {
+    private function getOrCreateWallet($customerID)
+    {
+        return Wallet::firstOrCreate(
+            ['CustomerID' => $customerID],
+            ['Balance' => 0]
+        );
+    }
+
     public function getProducts()
     {
         return response()->json(Product::with([
@@ -104,6 +114,7 @@ class EmployeeController extends Controller
         try {
             $order = Order::with('items')->find($id);
             if (!$order) {
+                DB::rollBack();
                 return response()->json(['message' => 'Order not found'], 404);
             }
             if ($order->OrderStatus !== 'Cancelled') {
@@ -114,6 +125,21 @@ class EmployeeController extends Controller
                         $product->save();
                     }
                 }
+
+                $wallet = $this->getOrCreateWallet($order->CustomerID);
+                $refundAmount = (float) $order->TotalAmount;
+
+                $wallet->Balance += $refundAmount;
+                $wallet->save();
+
+                WalletTransaction::create([
+                    'WalletID' => $wallet->WalletID,
+                    'Amount' => $refundAmount,
+                    'TransactionType' => 'Credit',
+                    'Description' => 'Refund for cancelled Order #' . $order->OrderID,
+                    'TransactionDate' => now(),
+                ]);
+
                 $order->OrderStatus = 'Cancelled';
                 $order->save();
             }

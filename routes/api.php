@@ -101,6 +101,10 @@ Route::middleware('auth:customer')->prefix('customer')->group(function () {
     // Coupons
     Route::post('/coupons/validate', [CustomerController::class, 'validateCoupon']);
 
+    // Wallet
+    Route::get('/wallet', [CustomerController::class, 'getWallet']);
+    Route::post('/wallet/add-balance', [CustomerController::class, 'addWalletBalance']);
+
     // Cart (DB-backed)
     Route::get('/cart', [CustomerController::class, 'getCart']);
     Route::post('/cart/sync', [CustomerController::class, 'syncCart']);
