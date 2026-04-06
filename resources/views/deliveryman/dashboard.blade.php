@@ -104,12 +104,12 @@
                         <td>#${del.OrderID}</td>
                         <td><span class="badge bg-${statusClass} px-3 text-uppercase small">${del.DeliveryStatus}</span></td>
                         <td><small>${del.order ? del.order.Address : 'N/A'}</small></td>
-                        <td class="text-end pe-4">
+                        <td class="text-end pe-4 text-white">
                             ${del.DeliveryStatus === 'Pending' ? `
-                                <button class="btn btn-gold btn-sm px-4 shadow-sm" onclick="updateStatus(${del.DeliveryID}, 'Delivered')">
+                                <button class="btn btn-gold btn-sm px-4 shadow-sm text-white" onclick="updateStatus(${del.DeliveryID}, 'Delivered')">
                                     Done ✅
                                 </button>
-                            ` : '<span class="text-muted small">Completed</span>'}
+                            ` : '<span class="text-white small">Completed</span>'}
                         </td>
                     </tr>`;
                 }).join('');
@@ -139,4 +139,11 @@
         .catch(err => alert('Error updating status'));
     }
 </script>
+
+<style>
+/* Global fix for table text visibility */
+.table-dark td {
+    color: #fff !important;
+}
+</style>
 @endsection

@@ -66,6 +66,16 @@
 <script>
 document.addEventListener('DOMContentLoaded', loadOrders);
 
+function getEffectiveOrderStatus(order) {
+    if (order && order.delivery && order.delivery.DeliveryStatus === 'Delivered') {
+        return 'Delivered';
+    }
+    if (order && order.delivery && order.delivery.DeliveryStatus === 'In Progress') {
+        return 'Shipped';
+    }
+    return order.OrderStatus;
+}
+
 function loadOrders() {
     const container = document.getElementById('orders-container');
 
@@ -87,11 +97,12 @@ function loadOrders() {
         }
 
         container.innerHTML = data.map((order, index) => {
+            const effectiveStatus = getEffectiveOrderStatus(order);
             let statusClass = 'status-pending';
-            if (order.OrderStatus === 'Confirmed')  statusClass = 'status-confirmed';
-            if (order.OrderStatus === 'Shipped')    statusClass = 'status-shipped';
-            if (order.OrderStatus === 'Delivered')  statusClass = 'status-delivered';
-            if (order.OrderStatus === 'Cancelled')  statusClass = 'status-cancelled';
+            if (effectiveStatus === 'Confirmed')  statusClass = 'status-confirmed';
+            if (effectiveStatus === 'Shipped')    statusClass = 'status-shipped';
+            if (effectiveStatus === 'Delivered')  statusClass = 'status-delivered';
+            if (effectiveStatus === 'Cancelled')  statusClass = 'status-cancelled';
 
             const orderDate = order.OrderDate
                 ? new Date(order.OrderDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
@@ -125,7 +136,7 @@ function loadOrders() {
                         <div class="text-muted small mb-1">ORDER ID</div>
                         <h6 class="mb-0 text-white fw-bold">${serialNumber}. #${order.OrderID}</h6>
                     </div>
-                    <span class="status-pill ${statusClass}">${order.OrderStatus}</span>
+                    <span class="status-pill ${statusClass}">${effectiveStatus}</span>
                 </div>
 
                 <div class="mb-3">
@@ -140,7 +151,7 @@ function loadOrders() {
                         <div class="text-end">
                         <div class="text-muted small">${order.items ? order.items.length : 0} item(s)</div>
                         <div class="fw-bold mt-1" style="color: var(--accent-cyan); font-size: 1.1rem;">Tk ${parseFloat(order.TotalAmount).toFixed(0)}</div>
-                        ${order.OrderStatus === 'Pending' ? `
+                        ${effectiveStatus === 'Pending' ? `
                             <button id="cancel-btn-${order.OrderID}" class="btn btn-sm btn-outline-danger mt-2" onclick="confirmCancel(${order.OrderID})">Cancel Order</button>
                         ` : ''}
                     </div>
