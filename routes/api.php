@@ -81,12 +81,30 @@ Route::middleware('auth:employee')->prefix('employee')->group(function () {
 
 // --- Protected Customer Routes ---
 Route::middleware('auth:customer')->prefix('customer')->group(function () {
+    // Profile
     Route::get('/profile', [CustomerController::class, 'getProfile']);
-    Route::get('/products', [ProductController::class, 'index']); // reuse public browse
+    Route::put('/profile', [CustomerController::class, 'updateProfile']);
+    Route::post('/profile/change-password', [CustomerController::class, 'changePassword']);
+
+    // Products
+    Route::get('/products', [ProductController::class, 'index']);
     Route::get('/products/{id}', [ProductController::class, 'show']);
+
+    // Orders
     Route::post('/orders', [CustomerController::class, 'placeOrder']);
     Route::get('/orders', [CustomerController::class, 'getOrderHistory']);
+    Route::post('/orders/{id}/cancel', [CustomerController::class, 'cancelOrder']);
+
+    // Coupons
     Route::post('/coupons/validate', [CustomerController::class, 'validateCoupon']);
+
+    // Cart (DB-backed)
+    Route::get('/cart', [CustomerController::class, 'getCart']);
+    Route::post('/cart/sync', [CustomerController::class, 'syncCart']);
+    Route::post('/cart/items', [CustomerController::class, 'addToCart']);
+    Route::put('/cart/items/{productId}', [CustomerController::class, 'updateCartItem']);
+    Route::delete('/cart/items/{productId}', [CustomerController::class, 'removeCartItem']);
+    Route::delete('/cart', [CustomerController::class, 'clearCart']);
 });
 
 // --- Protected DeliveryMan Routes ---

@@ -100,8 +100,29 @@ class EmployeeController extends Controller
 
     public function cancelOrder($id)
     {
-        Order::where('OrderID', $id)->update(['OrderStatus' => 'Cancelled']);
-        return response()->json(['message' => 'Order cancelled successfully']);
+        DB::beginTransaction();
+        try {
+            $order = Order::with('items')->find($id);
+            if (!$order) {
+                return response()->json(['message' => 'Order not found'], 404);
+            }
+            if ($order->OrderStatus !== 'Cancelled') {
+                foreach ($order->items as $item) {
+                    $product = Product::find($item->ProductID);
+                    if ($product) {
+                        $product->Stock += $item->Quantity;
+                        $product->save();
+                    }
+                }
+                $order->OrderStatus = 'Cancelled';
+                $order->save();
+            }
+            DB::commit();
+            return response()->json(['message' => 'Order cancelled successfully']);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['message' => 'Error cancelling order: ' . $e->getMessage()], 500);
+        }
     }
 
     public function getAvailableDeliveryMen()
