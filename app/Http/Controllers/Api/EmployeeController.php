@@ -15,9 +15,12 @@ use App\Models\WalletTransaction;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use App\Http\Controllers\Api\Concerns\InteractsWithAccountEmails;
 
 class EmployeeController extends Controller
 {
+    use InteractsWithAccountEmails;
+
     private function getOrCreateWallet($customerID)
     {
         return Wallet::firstOrCreate(
@@ -166,10 +169,14 @@ class EmployeeController extends Controller
         $request->validate([
             'DelManName' => 'required|string|max:255',
             'Phone' => 'required|string|max:20',
-            'Email' => 'required|email|unique:DeliveryMan,Email',
+            'Email' => 'required|email',
             'Address' => 'required|string|max:255',
             'Password' => 'nullable|string|min:6',
         ]);
+
+        if ($this->emailExistsAcrossAccounts($request->Email)) {
+            return response()->json(['errors' => ['Email' => ['This email is already registered.']]], 422);
+        }
 
         $deliveryMan = DeliveryMan::create([
             'DelManName' => $request->DelManName,
