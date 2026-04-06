@@ -30,4 +30,9 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
+    'cloudinary' => [
+        'cloud_name' => env('CLOUDINARY_CLOUD_NAME', parse_url(env('CLOUDINARY_URL', ''), PHP_URL_HOST)),
+        'upload_preset' => trim((string) env('UPLOAD_PRESET', env('UPLOAD_PRESET ', ''))),
+    ],
+
 ];

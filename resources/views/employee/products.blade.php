@@ -44,6 +44,20 @@
     .search-box:focus { background: rgba(255,255,255,0.12) !important; box-shadow: 0 0 0 0.2rem rgba(40,167,69,0.2) !important; border-color: #28a745 !important; }
     .btn-add-main { background: linear-gradient(135deg,#28a745,#20c997); border: none; border-radius: 10px; font-weight:600; }
     .btn-add-main:hover { opacity: 0.9; transform: translateY(-1px); }
+    .image-preview-box {
+        width: 90px;
+        height: 90px;
+        border-radius: 10px;
+        border: 1px solid rgba(255,255,255,0.2);
+        overflow: hidden;
+        background: rgba(255,255,255,0.06);
+    }
+    .image-preview-box img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+    }
 </style>
 @endsection
 
@@ -143,12 +157,16 @@
                         <textarea class="form-control" id="add-spec" rows="2" placeholder="Technical specifications"></textarea>
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label text-white-50 small">Warranty</label>
-                        <input type="text" class="form-control" id="add-warranty" placeholder="e.g. 1 Year Manufacturer">
+                        <label class="form-label text-white-50 small">Warranty (Optional)</label>
+                        <input type="text" class="form-control" id="add-warranty" placeholder="e.g. 1 Year Manufacturer (leave blank if not applicable)">
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label text-white-50 small">Image URL</label>
-                        <input type="text" class="form-control" id="add-image" placeholder="https://...">
+                        <label class="form-label text-white-50 small">Product Image *</label>
+                        <input type="file" class="form-control" id="add-image-file" accept="image/*">
+                        <div class="form-text text-white-50 small">Image will be uploaded to Cloudinary automatically.</div>
+                        <div class="image-preview-box mt-2 d-none" id="add-image-preview-box">
+                            <img id="add-image-preview" alt="Selected product image preview">
+                        </div>
                     </div>
                 </div>
             </div>
@@ -204,12 +222,17 @@
                         <textarea class="form-control" id="edit-spec" rows="2"></textarea>
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label text-white-50 small">Warranty</label>
+                        <label class="form-label text-white-50 small">Warranty (Optional)</label>
                         <input type="text" class="form-control" id="edit-warranty">
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label text-white-50 small">Image URL</label>
-                        <input type="text" class="form-control" id="edit-image">
+                        <label class="form-label text-white-50 small">Replace Product Image</label>
+                        <input type="file" class="form-control" id="edit-image-file" accept="image/*">
+                        <input type="hidden" id="edit-image-current">
+                        <div class="form-text text-white-50 small">Leave empty to keep current image.</div>
+                        <div class="image-preview-box mt-2 d-none" id="edit-image-preview-box">
+                            <img id="edit-image-preview" alt="Selected product image preview">
+                        </div>
                     </div>
                 </div>
             </div>
@@ -289,12 +312,38 @@
 <script>
 let allProducts = [];
 let categories  = [];
+const CLOUDINARY_CLOUD_NAME = @json(config('services.cloudinary.cloud_name'));
+const CLOUDINARY_UPLOAD_PRESET = @json(config('services.cloudinary.upload_preset'));
 
 document.addEventListener('DOMContentLoaded', () => {
     loadProducts();
     loadCategories();
     document.getElementById('product-search').addEventListener('input', filterProducts);
+    document.getElementById('add-image-file').addEventListener('change', () => {
+        previewSelectedImage('add-image-file', 'add-image-preview', 'add-image-preview-box');
+    });
+    document.getElementById('edit-image-file').addEventListener('change', () => {
+        previewSelectedImage('edit-image-file', 'edit-image-preview', 'edit-image-preview-box');
+    });
 });
+
+function previewSelectedImage(fileInputId, previewImgId, previewBoxId) {
+    const fileInput = document.getElementById(fileInputId);
+    const previewImg = document.getElementById(previewImgId);
+    const previewBox = document.getElementById(previewBoxId);
+    const file = fileInput.files && fileInput.files[0];
+
+    if (!file) {
+        previewImg.removeAttribute('src');
+        previewBox.classList.add('d-none');
+        return;
+    }
+
+    const objectUrl = URL.createObjectURL(file);
+    previewImg.src = objectUrl;
+    previewImg.onload = () => URL.revokeObjectURL(objectUrl);
+    previewBox.classList.remove('d-none');
+}
 
 // --- Load Data ---
 function loadProducts() {
@@ -336,10 +385,20 @@ function renderProducts(products) {
         grid.innerHTML = '<div class="col-12 text-center py-5 text-white-50">No products found. Click "+ Add Product" to get started.</div>';
         return;
     }
+    const today = new Date().toISOString().split('T')[0];
     grid.innerHTML = products.map(p => {
         const catName   = p.category ? p.category.CategoryName : '—';
-        const hasOffer  = p.offers && p.offers.length > 0;
+        const activeOffers = (p.offers || []).filter(o => o.StartDate <= today && o.EndDate >= today);
+        const activeOffer = activeOffers.length
+            ? activeOffers.reduce((best, current) =>
+                parseFloat(current.DiscountAmount) > parseFloat(best.DiscountAmount) ? current : best
+            )
+            : null;
+        const hasOffer  = !!activeOffer;
         const imgSrc    = p.detail && p.detail.Image ? p.detail.Image : null;
+        const price = parseFloat(p.Price) || 0;
+        const discountAmount = activeOffer ? parseFloat(activeOffer.DiscountAmount) || 0 : 0;
+        const discountedPrice = Math.max(0, price - discountAmount);
         const stockBadge = p.Stock === 0
             ? '<span class="badge bg-danger stock-badge">Out of Stock</span>'
             : p.Stock <= 5
@@ -364,9 +423,19 @@ function renderProducts(products) {
                     </div>
                     <h6 class="fw-bold text-white mb-1" style="font-size:0.9rem; line-height:1.3;">${p.ProductName}</h6>
                     <div class="d-flex align-items-center justify-content-between mt-auto pt-2">
-                        <span class="price-tag">৳${parseFloat(p.Price).toLocaleString()}</span>
+                        ${hasOffer
+                            ? `<div>
+                                <div class="small text-white-50 text-decoration-line-through">৳${price.toLocaleString()}</div>
+                                <span class="price-tag">৳${discountedPrice.toLocaleString()}</span>
+                               </div>`
+                            : `<span class="price-tag">৳${price.toLocaleString()}</span>`
+                        }
                         ${stockBadge}
                     </div>
+                    ${hasOffer
+                        ? `<div class="small mt-1" style="color:#f1c40f;">Save ৳${discountAmount.toLocaleString()}</div>`
+                        : ''
+                    }
                     <div class="d-flex gap-1 mt-3">
                         <button class="btn btn-sm btn-outline-light flex-fill" onclick='openEditModal(${JSON.stringify(p)})' title="Edit">✏️</button>
                         <button class="btn btn-sm btn-outline-warning flex-fill" onclick='openOfferModal(${JSON.stringify({ProductID:p.ProductID, ProductName:p.ProductName, Price:p.Price})})' title="Add Offer">🏷️</button>
@@ -397,11 +466,36 @@ function openAddModal() {
     document.getElementById('add-desc').value = '';
     document.getElementById('add-spec').value = '';
     document.getElementById('add-warranty').value = '';
-    document.getElementById('add-image').value = '';
+    document.getElementById('add-image-file').value = '';
+    document.getElementById('add-image-preview').removeAttribute('src');
+    document.getElementById('add-image-preview-box').classList.add('d-none');
     new bootstrap.Modal(document.getElementById('addModal')).show();
 }
 
-function submitAddProduct() {
+async function uploadImageToCloudinary(file) {
+    if (!CLOUDINARY_CLOUD_NAME || !CLOUDINARY_UPLOAD_PRESET) {
+        throw new Error('Cloudinary is not configured');
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+
+    const response = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`, {
+        method: 'POST',
+        body: formData,
+    });
+
+    const result = await response.json();
+    if (!response.ok || !result.secure_url) {
+        throw new Error(result?.error?.message || 'Image upload failed');
+    }
+
+    return result.secure_url;
+}
+
+async function submitAddProduct() {
+    const imageFile = document.getElementById('add-image-file').files[0];
     const body = {
         CategoryID: document.getElementById('add-category').value,
         ProductName: document.getElementById('add-name').value.trim(),
@@ -411,27 +505,39 @@ function submitAddProduct() {
         Description: document.getElementById('add-desc').value.trim(),
         Specification: document.getElementById('add-spec').value.trim(),
         Warranty: document.getElementById('add-warranty').value.trim(),
-        Image: document.getElementById('add-image').value.trim(),
+        Image: '',
     };
 
     if (!body.ProductName || !body.Brand || !body.CategoryID || !body.Price || !body.Stock) {
         showAlert('Please fill all required fields', 'warning'); return;
     }
+    if (!imageFile) {
+        showAlert('Please choose a product image', 'warning'); return;
+    }
 
     const btn = document.querySelector('#addModal .btn-success');
-    btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Adding...';
+    btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Uploading Image...';
 
-    fetch(`${API_URL}/employee/products`, {
-        method: 'POST', headers: getHeaders(), body: JSON.stringify(body)
-    })
-    .then(r => r.json())
-    .then(() => {
+    try {
+        body.Image = await uploadImageToCloudinary(imageFile);
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Adding...';
+
+        const addResponse = await fetch(`${API_URL}/employee/products`, {
+            method: 'POST', headers: getHeaders(), body: JSON.stringify(body)
+        });
+        if (!addResponse.ok) {
+            const addError = await addResponse.json().catch(() => ({}));
+            throw new Error(addError.message || 'Failed to add product');
+        }
+
         bootstrap.Modal.getInstance(document.getElementById('addModal')).hide();
         showAlert('✅ Product added successfully!', 'success');
         loadProducts();
-    })
-    .catch(() => showAlert('Failed to add product', 'danger'))
-    .finally(() => { btn.disabled = false; btn.innerHTML = '✅ Add Product'; });
+    } catch (error) {
+        showAlert(error.message || 'Failed to add product', 'danger');
+    } finally {
+        btn.disabled = false; btn.innerHTML = '✅ Add Product';
+    }
 }
 
 // --- Edit Product ---
@@ -444,15 +550,28 @@ function openEditModal(p) {
     document.getElementById('edit-desc').value  = p.detail ? p.detail.Description : '';
     document.getElementById('edit-spec').value  = p.detail ? p.detail.Specification : '';
     document.getElementById('edit-warranty').value = p.detail ? p.detail.Warranty : '';
-    document.getElementById('edit-image').value    = p.detail ? p.detail.Image : '';
+    document.getElementById('edit-image-file').value = '';
+    document.getElementById('edit-image-current').value = p.detail ? (p.detail.Image || '') : '';
+    const editPreview = document.getElementById('edit-image-preview');
+    const editPreviewBox = document.getElementById('edit-image-preview-box');
+    if (p.detail && p.detail.Image) {
+        editPreview.src = p.detail.Image;
+        editPreviewBox.classList.remove('d-none');
+    } else {
+        editPreview.removeAttribute('src');
+        editPreviewBox.classList.add('d-none');
+    }
     // Set category
     const sel = document.getElementById('edit-category');
     if (sel) sel.value = p.CategoryID;
     new bootstrap.Modal(document.getElementById('editModal')).show();
 }
 
-function submitEditProduct() {
+async function submitEditProduct() {
     const id = document.getElementById('edit-product-id').value;
+    const imageFile = document.getElementById('edit-image-file').files[0];
+    let imageUrl = document.getElementById('edit-image-current').value || '';
+
     const body = {
         CategoryID: document.getElementById('edit-category').value,
         ProductName: document.getElementById('edit-name').value.trim(),
@@ -462,23 +581,36 @@ function submitEditProduct() {
         Description: document.getElementById('edit-desc').value.trim(),
         Specification: document.getElementById('edit-spec').value.trim(),
         Warranty: document.getElementById('edit-warranty').value.trim(),
-        Image: document.getElementById('edit-image').value.trim(),
+        Image: imageUrl,
     };
 
     const btn = document.querySelector('#editModal .btn-success');
     btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Saving...';
 
-    fetch(`${API_URL}/employee/products/${id}`, {
-        method: 'PUT', headers: getHeaders(), body: JSON.stringify(body)
-    })
-    .then(r => r.json())
-    .then(() => {
+    try {
+        if (imageFile) {
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Uploading Image...';
+            imageUrl = await uploadImageToCloudinary(imageFile);
+            body.Image = imageUrl;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Saving...';
+        }
+
+        const editResponse = await fetch(`${API_URL}/employee/products/${id}`, {
+            method: 'PUT', headers: getHeaders(), body: JSON.stringify(body)
+        });
+        if (!editResponse.ok) {
+            const editError = await editResponse.json().catch(() => ({}));
+            throw new Error(editError.message || 'Failed to update product');
+        }
+
         bootstrap.Modal.getInstance(document.getElementById('editModal')).hide();
         showAlert('✅ Product updated successfully!', 'success');
         loadProducts();
-    })
-    .catch(() => showAlert('Failed to update product', 'danger'))
-    .finally(() => { btn.disabled = false; btn.innerHTML = '💾 Save Changes'; });
+    } catch (error) {
+        showAlert(error.message || 'Failed to update product', 'danger');
+    } finally {
+        btn.disabled = false; btn.innerHTML = '💾 Save Changes';
+    }
 }
 
 // --- Delete Product ---

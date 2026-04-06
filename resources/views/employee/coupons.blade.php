@@ -127,8 +127,11 @@
                         <div class="form-text text-white-50 small">Must be unique. Customers will enter this at checkout.</div>
                     </div>
                     <div class="col-12">
-                        <label class="form-label text-white-50 small">Discount Amount (৳) *</label>
-                        <input type="number" class="form-control" id="coupon-amount" placeholder="e.g. 150" step="0.01" min="1">
+                        <label class="form-label text-white-50 small">Discount Percentage (%) *</label>
+                        <div class="input-group">
+                            <input type="number" class="form-control" id="coupon-amount" placeholder="e.g. 10" step="1" min="1" max="99">
+                            <span class="input-group-text bg-transparent text-white border-secondary">%</span>
+                        </div>
                     </div>
                     <div class="col-md-6">
                         <label class="form-label text-white-50 small">Valid From *</label>
@@ -160,6 +163,11 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('coupon-end').value   = today;
 });
 
+function formatPercent(value) {
+    const num = parseFloat(value);
+    return Number.isFinite(num) ? num.toString().replace(/\.0+$/, '') : value;
+}
+
 // --- Coupons ---
 function loadCoupons() {
     fetch(`${API_URL}/employee/coupons`, { headers: getHeaders() })
@@ -181,7 +189,7 @@ function loadCoupons() {
                 <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
                     <div>
                         <span class="coupon-code">${c.CouponCode}</span>
-                        <p class="mt-2 mb-1 fw-bold text-white">৳${parseFloat(c.DiscountAmount).toLocaleString()} Off</p>
+                        <p class="mt-2 mb-1 fw-bold text-white">${formatPercent(c.DiscountAmount)}% Off</p>
                         <div class="d-flex gap-2 flex-wrap">
                             <span class="date-chip">📅 ${c.StartDate} → ${c.EndDate}</span>
                             <span class="${statusCls} small fw-semibold">${statusIcon} ${statusText}</span>
@@ -221,6 +229,11 @@ function submitCoupon() {
     if (!body.CouponCode || !body.DiscountAmount || !body.StartDate || !body.EndDate) {
         showAlert('Please fill all fields', 'warning'); return;
     }
+    const discountPct = parseFloat(body.DiscountAmount);
+    if (!discountPct || discountPct < 1 || discountPct > 99) {
+        showAlert('Discount percentage must be between 1 and 99', 'warning'); return;
+    }
+    body.DiscountAmount = discountPct;
     if (body.EndDate < body.StartDate) {
         showAlert('End date must be after start date', 'warning'); return;
     }
