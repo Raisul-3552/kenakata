@@ -6,13 +6,13 @@
 <style>
     /* Professional Dark Theme palette */
     :root {
-        --bg-deep: #0f172a;        /* Deep Navy/Charcoal */
-        --bg-surface: #1e293b;     /* Card surface */
-        --text-primary: #f8fafc;   /* White contrast */
-        --text-secondary: #94a3b8; /* Muted contrast */
-        --accent-cyan: #0ea5e9;    /* Sky blue accent */
-        --accent-orange: #f59e0b;  /* Orange accent */
-        --border-color: #334155;   /* Subtle border */
+        --bg-deep: #0f172a;
+        --bg-surface: #1e293b;
+        --text-primary: #f8fafc;
+        --text-secondary: #94a3b8;
+        --accent-cyan: #0ea5e9;
+        --accent-orange: #f59e0b;
+        --border-color: #334155;
     }
 
     body {
@@ -23,21 +23,16 @@
         -webkit-font-smoothing: antialiased;
     }
 
-    /* Global Typography Fixes */
     h1, h2, h3, h4, h5, h6, .h1, .h2, .h3, .h4, .h5, .h6 {
         color: var(--text-primary) !important;
         font-weight: 700;
     }
 
-    p, span, label, div {
-        color: inherit; /* Fallback to body color */
-    }
+    p, span, label, div { color: inherit; }
 
-    .text-muted {
-        color: var(--text-secondary) !important;
-    }
+    .text-muted { color: var(--text-secondary) !important; }
 
-    /* Professional Navbar */
+    /* Navbar */
     .navbar-professional {
         background-color: rgba(15, 23, 42, 0.95) !important;
         backdrop-filter: blur(8px);
@@ -53,9 +48,7 @@
         text-decoration: none;
     }
 
-    .nav-brand-logo span {
-        color: var(--text-primary);
-    }
+    .nav-brand-logo span { color: var(--text-primary); }
 
     .nav-link {
         color: var(--text-secondary) !important;
@@ -65,21 +58,15 @@
         transition: color 0.2s ease;
     }
 
-    .nav-link:hover, .nav-link.active {
-        color: var(--accent-cyan) !important;
-    }
+    .nav-link:hover, .nav-link.active { color: var(--accent-cyan) !important; }
 
-    /* Dark Mode Form Controls (for Cart/Profile) */
+    /* Form Controls */
     .form-control, .form-select {
         background-color: #020617 !important;
         border: 1px solid var(--border-color) !important;
         color: var(--text-primary) !important;
     }
-
-    .form-control::placeholder {
-        color: #475569 !important;
-    }
-
+    .form-control::placeholder { color: #475569 !important; }
     .form-control:focus {
         border-color: var(--accent-cyan) !important;
         box-shadow: 0 0 0 2px rgba(14, 165, 233, 0.2) !important;
@@ -90,7 +77,7 @@
         background-color: var(--bg-surface) !important;
         border: 1px solid var(--border-color) !important;
         border-radius: 12px;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
     }
 
     /* Buttons */
@@ -101,10 +88,7 @@
         border-radius: 8px;
         border: none;
     }
-
-    .btn-cyan:hover {
-        background-color: #0284c7 !important;
-    }
+    .btn-cyan:hover { background-color: #0284c7 !important; }
 </style>
 @yield('customer_styles')
 @endsection
@@ -113,7 +97,7 @@
 <nav class="navbar navbar-expand-lg navbar-dark navbar-professional sticky-top">
     <div class="container">
         <a class="nav-brand-logo" href="/customer/dashboard">KENA<span>KATA</span></a>
-        
+
         <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
             <span class="navbar-toggler-icon"></span>
         </button>
@@ -124,16 +108,23 @@
                     <a class="nav-link {{ Request::is('customer/dashboard*') ? 'active' : '' }}" href="/customer/dashboard">Products</a>
                 </li>
                 <li class="nav-item">
+                    <a class="nav-link {{ Request::is('customer/orders*') ? 'active' : '' }}" href="/customer/orders">My Orders</a>
+                </li>
+                <li class="nav-item">
                     <a class="nav-link {{ Request::is('customer/profile*') ? 'active' : '' }}" href="/customer/profile">Profile</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link {{ Request::is('customer/wallet*') ? 'active' : '' }}" href="/customer/wallet">Wallet</a>
                 </li>
                 <li class="nav-item">
                     <a class="nav-link {{ Request::is('customer/cart*') ? 'active' : '' }}" href="/customer/cart">Cart</a>
                 </li>
             </ul>
-            
+
             <div class="d-flex align-items-center">
+                <span id="wallet-balance-nav" class="badge me-3" style="background-color: var(--accent-orange); color: #111827;">Wallet: Tk 0</span>
                 <a href="/customer/cart" class="text-decoration-none me-3" id="cart-counter-nav">
-                    <span class="badge bg-primary" style="background-color: var(--accent-cyan) !important;">
+                    <span class="badge" style="background-color: var(--accent-cyan);">
                         Cart (0)
                     </span>
                 </a>
@@ -152,26 +143,135 @@
 
 @section('scripts')
 <script>
-    function getCart() { return JSON.parse(localStorage.getItem('kenakata_cart')) || []; }
-    function saveCart(cart) { localStorage.setItem('kenakata_cart', JSON.stringify(cart)); updateCartCount(); }
-    
+    // ─── LocalStorage cart helpers ────────────────────────────────────────────
+    function getCart() {
+        const cart = JSON.parse(localStorage.getItem('kenakata_cart')) || [];
+        return cart.map(item => ({ ...item, quantity: Number(item.quantity) || 1 }));
+    }
+    function saveCart(cart)   { localStorage.setItem('kenakata_cart', JSON.stringify(cart)); updateCartCount(); }
+
     function updateCartCount() {
-        const cart = getCart();
+        const cart       = getCart();
         const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
         const navCounter = document.getElementById('cart-counter-nav');
-        if(navCounter) navCounter.querySelector('.badge').innerText = `Cart (${totalItems})`;
+        if (navCounter) navCounter.querySelector('.badge').innerText = `Cart (${totalItems})`;
     }
 
+    function loadWalletBalance() {
+        const token = localStorage.getItem('kenakata_token');
+        if (!token) return;
+
+        fetch(`${API_URL}/customer/wallet`, { headers: getHeaders() })
+        .then(r => r.ok ? r.json() : null)
+        .then(data => {
+            const wallet = data && data.wallet ? data.wallet : null;
+            const balance = wallet ? Number(wallet.Balance || 0) : 0;
+            window.customerWalletBalance = balance;
+
+            const badge = document.getElementById('wallet-balance-nav');
+            if (badge) {
+                badge.innerText = `Wallet: Tk ${balance.toFixed(0)}`;
+            }
+
+            window.dispatchEvent(new CustomEvent('wallet:updated', {
+                detail: { balance }
+            }));
+        })
+        .catch(() => {
+            const badge = document.getElementById('wallet-balance-nav');
+            if (badge) badge.innerText = 'Wallet: Tk 0';
+        });
+    }
+
+    // ─── Add to cart (localStorage + DB sync) ────────────────────────────────
     function addToCart(product) {
-        let cart = getCart();
-        let existing = cart.find(i => i.id === product.id);
-        if(existing) { existing.quantity += 1; } 
-        else { cart.push({...product, quantity: 1}); }
+        // 1. Update localStorage immediately for instant UI feedback
+        let cart     = getCart();
+        let existing = cart.find(i => i.id == product.id);
+        if (existing) {
+            existing.quantity = (Number(existing.quantity) || 0) + 1;
+        } else {
+            cart.push({ ...product, quantity: 1 });
+        }
         saveCart(cart);
-        alert(`🛒 Added ${product.name} to cart!`);
+
+        // 2. Sync to DB in the background
+        fetch(`${API_URL}/customer/cart/items`, {
+            method: 'POST',
+            headers: getHeaders(),
+            body: JSON.stringify({ id: product.id, name: product.name, price: product.price, quantity: 1 })
+        }).catch(console.error);
+
+        // 3. Show toast feedback
+        showCartToast(product.name);
     }
 
-    document.addEventListener('DOMContentLoaded', updateCartCount);
+    function showCartToast(name) {
+        // Remove old toast if any
+        const old = document.getElementById('cart-toast');
+        if (old) old.remove();
+
+        const toast = document.createElement('div');
+        toast.id = 'cart-toast';
+        toast.style.cssText = `
+            position: fixed; bottom: 24px; right: 24px; z-index: 9999;
+            background: #1e293b; border: 1px solid #0ea5e9;
+            border-radius: 12px; padding: 14px 20px;
+            color: #f8fafc; font-size: 0.9rem; font-weight: 600;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+            animation: slideIn 0.3s ease;
+        `;
+        toast.innerHTML = `🛒 <strong style="margin-left: 8px;">${name}</strong> added to cart!`;
+        document.body.appendChild(toast);
+        setTimeout(() => { if (document.body.contains(toast)) toast.remove(); }, 2500);
+    }
+
+    function showToast(message, type = 'success') {
+        const old = document.getElementById('main-toast');
+        if (old) old.remove();
+
+        const toast = document.createElement('div');
+        toast.id = 'main-toast';
+        const borderColor = type === 'error' ? '#ef4444' : '#0ea5e9';
+        const icon = type === 'error' ? '❌' : (type === 'info' ? 'ℹ️' : '✅');
+
+        toast.style.cssText = `
+            position: fixed; bottom: 84px; right: 24px; z-index: 9999;
+            background: #1e293b; border: 1px solid ${borderColor};
+            border-radius: 12px; padding: 14px 20px;
+            color: #f8fafc; font-size: 0.9rem; font-weight: 600;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+            animation: slideIn 0.3s ease;
+        `;
+        toast.innerHTML = `${icon} <span style="margin-left: 8px;">${message}</span>`;
+        document.body.appendChild(toast);
+        setTimeout(() => { if (document.body.contains(toast)) toast.remove(); }, 3000);
+    }
+
+    // ─── On load: sync DB cart back to localStorage (so cart page is accurate) ─
+    document.addEventListener('DOMContentLoaded', () => {
+        updateCartCount();
+        loadWalletBalance();
+
+        // Pull latest cart from DB and sync to localStorage
+        const token = localStorage.getItem('kenakata_token');
+        if (token) {
+            fetch(`${API_URL}/customer/cart`, { headers: getHeaders() })
+            .then(r => r.ok ? r.json() : [])
+            .then(dbCart => {
+                if (Array.isArray(dbCart)) {
+                    saveCart(dbCart);
+                }
+            })
+            .catch(console.error);
+        }
+    });
 </script>
+<style>
+    @keyframes slideIn {
+        from { transform: translateX(120%); opacity: 0; }
+        to   { transform: translateX(0);    opacity: 1; }
+    }
+</style>
 @yield('customer_scripts')
 @endsection

@@ -16,6 +16,8 @@ use App\Http\Controllers\Api\DeliveryController;
 */
 
 // --- Public Routes ---
+Route::post('/login', [AuthController::class, 'login']);
+Route::post('/register', [AuthController::class, 'register']);
 Route::post('/admin/login', [AuthController::class, 'adminLogin']);
 Route::post('/employee/login', [AuthController::class, 'employeeLogin']);
 Route::post('/customer/login', [AuthController::class, 'customerLogin']);
@@ -54,6 +56,9 @@ Route::middleware('auth:employee')->prefix('employee')->group(function () {
     // Delivery
     Route::get('/deliverymen/available', [EmployeeController::class, 'getAvailableDeliveryMen']);
     Route::get('/deliverymen/all', [EmployeeController::class, 'getAllDeliveryMenStatus']);
+    Route::get('/deliverymen', [EmployeeController::class, 'getDeliveryMen']);
+    Route::post('/deliverymen', [EmployeeController::class, 'addDeliveryMan']);
+    Route::delete('/deliverymen/{id}', [EmployeeController::class, 'deleteDeliveryMan']);
     Route::get('/products', [EmployeeController::class, 'getProducts']);
     Route::post('/products', [EmployeeController::class, 'addProduct']);
     Route::put('/products/{id}', [EmployeeController::class, 'editProduct']);
@@ -81,11 +86,21 @@ Route::middleware('auth:employee')->prefix('employee')->group(function () {
 
 // --- Protected Customer Routes ---
 Route::middleware('auth:customer')->prefix('customer')->group(function () {
+    // Profile
     Route::get('/profile', [CustomerController::class, 'getProfile']);
-    Route::get('/products', [ProductController::class, 'index']); // reuse public browse
+    Route::put('/profile', [CustomerController::class, 'updateProfile']);
+    Route::post('/profile/change-password', [CustomerController::class, 'changePassword']);
+
+    // Products
+    Route::get('/products', [ProductController::class, 'index']);
     Route::get('/products/{id}', [ProductController::class, 'show']);
+
+    // Orders
     Route::post('/orders', [CustomerController::class, 'placeOrder']);
     Route::get('/orders', [CustomerController::class, 'getOrderHistory']);
+    Route::post('/orders/{id}/cancel', [CustomerController::class, 'cancelOrder']);
+
+    // Coupons
     Route::post('/coupons/validate', [CustomerController::class, 'validateCoupon']);
     Route::post('/deliveries/{id}/rate', [CustomerController::class, 'rateRider']);
 });
@@ -95,7 +110,9 @@ Route::middleware('auth:deliveryman')->prefix('deliveryman')->group(function () 
     Route::get('/deliveries', [DeliveryController::class, 'getAssignedDeliveries']);
     Route::post('/deliveries/{id}/update-status', [DeliveryController::class, 'updateStatus']);
     Route::get('/profile', [DeliveryController::class, 'getProfile']);
-    Route::post('/profile/update', [DeliveryController::class, 'updateProfile']);
+    Route::put('/profile', [DeliveryController::class, 'updateProfile']);
+    Route::post('/profile/change-password', [DeliveryController::class, 'changePassword']);
+    Route::post('/profile/toggle-status', [DeliveryController::class, 'toggleStatus']);
 });
 
 // Common logout

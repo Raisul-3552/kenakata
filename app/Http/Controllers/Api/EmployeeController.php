@@ -10,12 +10,25 @@ use App\Models\Coupon;
 use App\Models\Order;
 use App\Models\Category;
 use App\Models\DeliveryMan;
+use App\Models\Wallet;
+use App\Models\WalletTransaction;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use App\Http\Controllers\Api\Concerns\InteractsWithAccountEmails;
 
 class EmployeeController extends Controller
 {
+    use InteractsWithAccountEmails;
+
+    private function getOrCreateWallet($customerID)
+    {
+        return Wallet::firstOrCreate(
+            ['CustomerID' => $customerID],
+            ['Balance' => 0]
+        );
+    }
+
     public function getProducts()
     {
         return response()->json(Product::with([
@@ -100,13 +113,101 @@ class EmployeeController extends Controller
 
     public function cancelOrder($id)
     {
-        Order::where('OrderID', $id)->update(['OrderStatus' => 'Cancelled']);
-        return response()->json(['message' => 'Order cancelled successfully']);
+        DB::beginTransaction();
+        try {
+            $order = Order::with('items')->find($id);
+            if (!$order) {
+                DB::rollBack();
+                return response()->json(['message' => 'Order not found'], 404);
+            }
+            if ($order->OrderStatus !== 'Cancelled') {
+                foreach ($order->items as $item) {
+                    $product = Product::find($item->ProductID);
+                    if ($product) {
+                        $product->Stock += $item->Quantity;
+                        $product->save();
+                    }
+                }
+
+                $wallet = $this->getOrCreateWallet($order->CustomerID);
+                $refundAmount = (float) $order->TotalAmount;
+
+                $wallet->Balance += $refundAmount;
+                $wallet->save();
+
+                WalletTransaction::create([
+                    'WalletID' => $wallet->WalletID,
+                    'Amount' => $refundAmount,
+                    'TransactionType' => 'Credit',
+                    'Description' => 'Refund for cancelled Order #' . $order->OrderID,
+                    'TransactionDate' => now(),
+                ]);
+
+                $order->OrderStatus = 'Cancelled';
+                $order->save();
+            }
+            DB::commit();
+            return response()->json(['message' => 'Order cancelled successfully']);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['message' => 'Error cancelling order: ' . $e->getMessage()], 500);
+        }
     }
 
     public function getAvailableDeliveryMen()
     {
         return response()->json(DeliveryMan::where('Status', 'Available')->get());
+    }
+
+    public function getDeliveryMen()
+    {
+        return response()->json(DeliveryMan::orderByDesc('DelManID')->get());
+    }
+
+    public function addDeliveryMan(Request $request)
+    {
+        $request->validate([
+            'DelManName' => 'required|string|max:255',
+            'Phone' => 'required|string|max:20',
+            'Email' => 'required|email',
+            'Address' => 'required|string|max:255',
+            'Password' => 'nullable|string|min:6',
+        ]);
+
+        if ($this->emailExistsAcrossAccounts($request->Email)) {
+            return response()->json(['errors' => ['Email' => ['This email is already registered.']]], 422);
+        }
+
+        $deliveryMan = DeliveryMan::create([
+            'DelManName' => $request->DelManName,
+            'Phone' => $request->Phone,
+            'Email' => $request->Email,
+            'Password' => Hash::make($request->Password ?? 'password'),
+            'Address' => $request->Address,
+            'Status' => $request->Status ?? 'Available',
+        ]);
+
+        return response()->json($deliveryMan, 201);
+    }
+
+    public function deleteDeliveryMan($id)
+    {
+        $deliveryMan = DeliveryMan::where('DelManID', $id)->first();
+        if (!$deliveryMan) {
+            return response()->json(['message' => 'Deliveryman not found'], 404);
+        }
+
+        $hasActiveDelivery = $deliveryMan->deliveries()
+            ->whereIn('DeliveryStatus', ['Pending', 'In Progress'])
+            ->exists();
+
+        if ($hasActiveDelivery) {
+            return response()->json(['message' => 'Cannot delete a deliveryman with active deliveries.'], 422);
+        }
+
+        $deliveryMan->delete();
+
+        return response()->json(['message' => 'Deliveryman deleted successfully']);
     }
 
     public function getAllDeliveryMenStatus()

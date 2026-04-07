@@ -31,4 +31,9 @@ class Customer extends Authenticatable
     {
         return $this->hasMany(Order::class, 'CustomerID', 'CustomerID');
     }
+
+    public function wallet()
+    {
+        return $this->hasOne(Wallet::class, 'CustomerID', 'CustomerID');
+    }
 }

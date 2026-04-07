@@ -38,6 +38,9 @@ Route::get('/employee/products', function () {
 Route::get('/employee/coupons', function () {
     return view('employee.coupons');
 });
+Route::get('/employee/deliverymen', function () {
+    return view('employee.deliverymen');
+});
 
 // Customer
 Route::get('/customer/dashboard', function () {
@@ -48,6 +51,12 @@ Route::get('/customer/profile', function () {
 });
 Route::get('/customer/cart', function () {
     return view('customer.cart');
+});
+Route::get('/customer/orders', function () {
+    return view('customer.orders');
+});
+Route::get('/customer/wallet', function () {
+    return view('customer.wallet');
 });
 
 // DeliveryMan

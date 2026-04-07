@@ -12,9 +12,12 @@ use App\Models\Category;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
+use App\Http\Controllers\Api\Concerns\InteractsWithAccountEmails;
 
 class AdminController extends Controller
 {
+    use InteractsWithAccountEmails;
+
     public function getEmployees()
     {
         return response()->json(Employee::all());
@@ -34,8 +37,12 @@ class AdminController extends Controller
     {
         $request->validate([
             'EmployeeName' => 'required|string|max:255',
-            'Email' => 'required|email|unique:Employee,Email',
+            'Email' => 'required|email',
         ]);
+
+        if ($this->emailExistsAcrossAccounts($request->Email)) {
+            return response()->json(['errors' => ['Email' => ['This email is already registered.']]], 422);
+        }
 
         $employee = Employee::create([
             'AdminID' => $request->user()->AdminID,
@@ -86,9 +93,14 @@ class AdminController extends Controller
 
         $request->validate([
             'AdminName' => 'required|string|max:255',
-            'Email' => 'nullable|email|unique:Admin,Email,' . $admin->AdminID . ',AdminID',
-            'email' => 'nullable|email|unique:Admin,Email,' . $admin->AdminID . ',AdminID',
+            'Email' => 'nullable|email',
+            'email' => 'nullable|email',
         ]);
+
+        $incomingEmail = $request->input('Email', $request->input('email'));
+        if ($incomingEmail && $this->emailExistsAcrossAccounts($incomingEmail, ['model' => \App\Models\Admin::class, 'id' => $admin->AdminID])) {
+            return response()->json(['message' => 'Email already exists in another account.'], 422);
+        }
 
         $admin->AdminName = $name;
         if (!is_null($email) && $email !== '') {
@@ -129,8 +141,12 @@ class AdminController extends Controller
     {
         $request->validate([
             'AdminName' => 'required|string|max:255',
-            'Email' => 'required|email|unique:Admin,Email',
+            'Email' => 'required|email',
         ]);
+
+        if ($this->emailExistsAcrossAccounts($request->Email)) {
+            return response()->json(['errors' => ['Email' => ['This email is already registered.']]], 422);
+        }
 
         $admin = \App\Models\Admin::create([
             'AdminName' => $request->AdminName,

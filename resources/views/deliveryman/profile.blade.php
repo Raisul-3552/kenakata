@@ -2,20 +2,51 @@
 
 @section('title', 'Rider Profile')
 
+@section('delivery_styles')
+<style>
+    .profile-avatar {
+        width: 96px; height: 96px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #f59e0b, #fbbf24);
+        display: flex; align-items: center; justify-content: center;
+        font-size: 2.5rem; font-weight: 700; color: #1f2937;
+        flex-shrink: 0;
+        box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.25);
+    }
+    .section-card {
+        background: rgba(22, 33, 62, 0.85) !important;
+        border: 1px solid rgba(255,255,255,0.1) !important;
+        border-radius: 16px;
+        color: #fff;
+    }
+    .section-title {
+        font-size: 1rem; font-weight: 700; letter-spacing: 0.04em;
+        color: #fbbf24; text-transform: uppercase;
+        border-bottom: 1px solid rgba(245, 158, 11, 0.25);
+        padding-bottom: 0.5rem; margin-bottom: 1.25rem;
+    }
+    .info-row { display: flex; gap: 0.5rem; align-items: start; margin-bottom: 0.9rem; }
+    .info-label { min-width: 120px; color: rgba(255,255,255,0.5); font-size: 0.82rem; padding-top: 0.35rem; }
+    .info-value { color: #fff; font-weight: 500; flex: 1; }
+    .badge-role {
+        background: linear-gradient(135deg,#0f3460,#f59e0b);
+        font-size: 0.75rem; padding: 0.3em 0.75em; border-radius: 20px;
+    }
+</style>
+@endsection
+
 @section('delivery_content')
-<div class="row">
-    <div class="col-md-4">
-        <!-- Profile Card -->
-        <div class="card mb-4 shadow-sm border-0">
-            <div class="card-body text-center py-5">
-                <div class="mb-4">
-                    <div class="rounded-circle bg-gold d-inline-flex align-items-center justify-content-center shadow-lg" style="width: 120px; height: 120px;">
-                        <h1 id="initial-name" class="display-3 fw-bold text-dark mb-0">R</h1>
-                    </div>
+<div id="profile-alert"></div>
+
+<div class="row g-4">
+    <div class="col-lg-4">
+        <div class="card section-card p-4 h-100">
+            <div class="d-flex gap-3 align-items-center mb-4">
+                <div class="profile-avatar" id="avatar-initials">R</div>
+                <div>
+                    <h5 class="mb-1 fw-bold" id="profile-name">Loading...</h5>
+                    <span class="badge badge-role text-white">🚴 Deliveryman</span>
                 </div>
-                <h3 id="display-name" class="fw-bold text-white mb-1">Rider Name</h3>
-                <p id="display-email" class="text-gold opacity-75 mb-3">rider@email.com</p>
-                <div id="status-container" class="badge rounded-pill bg-success px-4 py-2 mt-2">Active Rider</div>
             </div>
         </div>
 
@@ -41,50 +72,52 @@
         </div>
     </div>
 
-    <div class="col-md-8">
-        <div id="alert-messages"></div>
-        
-        <div class="card shadow-sm border-0 mb-4">
-            <div class="card-header bg-transparent border-bottom border-light py-3">
-                <h5 class="mb-0 fw-bold"><i class="bi bi-person-gear me-2"></i>Account Settings</h5>
-            </div>
-            <div class="card-body py-4">
-                <form id="updateProfileForm">
-                    <div class="row mb-4">
-                        <div class="col-md-6">
-                            <label class="form-label text-gold small fw-bold">Full Name</label>
-                            <input type="text" class="form-control bg-dark border-secondary text-white py-2" id="profile_name" name="DelManName" required>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label text-gold small fw-bold">Email Address</label>
-                            <input type="email" class="form-control bg-dark border-secondary text-white py-2" id="profile_email" name="Email" required>
-                        </div>
+    <div class="col-lg-8">
+        <div class="card section-card p-4 mb-4">
+            <div class="section-title">✏️ Edit Profile</div>
+            <form id="edit-profile-form">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label text-white-50 small">Full Name</label>
+                        <input type="text" class="form-control" id="edit-name" required>
                     </div>
-
-                    <div class="mb-4">
-                        <label class="form-label text-gold small fw-bold text-uppercase">Security</label>
-                        <div class="p-3 rounded bg-dark border border-secondary">
-                            <div class="mb-0">
-                                <label class="form-label small">New Password</label>
-                                <input type="password" class="form-control bg-dark border-secondary text-white" id="profile_password" name="Password" placeholder="Minimum 6 characters">
-                                <div class="form-text text-light opacity-50 small mt-1">Leave empty if you don't want to change your password.</div>
-                            </div>
-                        </div>
+                    <div class="col-md-6">
+                        <label class="form-label text-white-50 small">Phone</label>
+                        <input type="text" class="form-control" id="edit-phone" required>
                     </div>
-
-                    <div class="d-grid shadow-lg">
-                        <button type="submit" class="btn btn-gold py-3 fw-bold text-uppercase">
-                            <i class="bi bi-check-circle-fill me-2"></i>Save Profile Changes
-                        </button>
+                    <div class="col-md-6">
+                        <label class="form-label text-white-50 small">Address</label>
+                        <input type="text" class="form-control" id="edit-address" required>
                     </div>
-                </form>
-            </div>
+                </div>
+                <div class="mt-3 d-flex gap-2">
+                    <button type="submit" class="btn btn-warning text-dark fw-bold px-4">💾 Save Changes</button>
+                    <button type="button" class="btn btn-outline-light px-4" onclick="loadProfile()">↺ Reset</button>
+                </div>
+            </form>
         </div>
 
-        <div class="card shadow-sm border-0">
-            <div class="card-body p-4 text-center">
-                <p class="mb-0 opacity-75">Registered since: <span id="join-date" class="fw-bold">N/A</span></p>
-            </div>
+        <div class="card section-card p-4">
+            <div class="section-title">🔒 Change Password</div>
+            <form id="change-password-form">
+                <div class="row g-3">
+                    <div class="col-12">
+                        <label class="form-label text-white-50 small">Current Password</label>
+                        <input type="password" class="form-control" id="current-password" required>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label text-white-50 small">New Password</label>
+                        <input type="password" class="form-control" id="new-password" placeholder="Min. 6 characters" required>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label text-white-50 small">Confirm New Password</label>
+                        <input type="password" class="form-control" id="confirm-password" required>
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <button type="submit" class="btn btn-outline-warning px-4 fw-bold">🔑 Change Password</button>
+                </div>
+            </form>
         </div>
     </div>
 </div>
@@ -93,16 +126,19 @@
 @section('scripts')
 <script>
     document.addEventListener('DOMContentLoaded', () => {
-        loadProfileData();
+        loadProfile();
+        document.getElementById('edit-profile-form').addEventListener('submit', saveProfile);
+        document.getElementById('change-password-form').addEventListener('submit', changePassword);
     });
 
-    function loadProfileData() {
-        const alertDiv = document.getElementById('alert-messages');
-
+    function loadProfile() {
         fetch(`${API_URL}/deliveryman/profile`, {
             headers: getHeaders()
         })
-        .then(res => res.json())
+        .then(res => {
+            if (res.status === 401 || res.status === 403) logout();
+            return res.json();
+        })
         .then(data => {
             const rider = data.rider;
             const lifetimeCount = data.lifetime_deliveries;
@@ -124,48 +160,123 @@
                 statusContainer.className = 'badge rounded-pill bg-success px-4 py-2 mt-2';
                 statusContainer.textContent = 'Available for Task';
             } else {
-                statusContainer.className = 'badge rounded-pill bg-warning text-dark px-4 py-2 mt-2';
-                statusContainer.textContent = 'Currently Busy';
+                btn.className = 'btn btn-outline-success';
+                btn.textContent = 'Set Available';
             }
         })
-        .catch(err => {
-            alertDiv.innerHTML = `<div class="alert alert-danger bg-danger border-0 text-white">Failed to load profile data.</div>`;
-        });
+        .catch(() => showAlert('Failed to load profile data.', 'danger'));
     }
 
-    document.getElementById('updateProfileForm').addEventListener('submit', function(e) {
+    function saveProfile(e) {
         e.preventDefault();
-        const alertDiv = document.getElementById('alert-messages');
-        
-        const payload = {
-            DelManName: document.getElementById('profile_name').value,
-            Email: document.getElementById('profile_email').value,
-        };
-        
-        const password = document.getElementById('profile_password').value;
-        if(password) {
-            payload.Password = password;
-        }
+        const btn = e.submitter || e.target.querySelector('[type=submit]');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Saving...';
 
-        fetch(`${API_URL}/deliveryman/profile/update`, {
-            method: 'POST',
+        const payload = {
+            DelManName: document.getElementById('edit-name').value,
+            Phone: document.getElementById('edit-phone').value,
+            Address: document.getElementById('edit-address').value,
+        };
+
+        fetch(`${API_URL}/deliveryman/profile`, {
+            method: 'PUT',
             headers: getHeaders(),
             body: JSON.stringify(payload)
         })
         .then(res => res.json().then(data => ({ status: res.status, body: data })))
         .then(res => {
-            if(res.status === 200) {
-                alertDiv.innerHTML = `<div class="alert alert-success bg-success border-0 text-white">✅ ${res.body.message}</div>`;
-                loadProfileData(); // Reload text
-                document.getElementById('profile_password').value = ''; // Clear password field
+            if (res.status === 200) {
+                showAlert('✅ ' + (res.body.message || 'Profile updated successfully'), 'success');
+                loadProfile();
             } else {
                 const errors = res.body.errors ? Object.values(res.body.errors).flat().join('<br>') : res.body.message;
-                alertDiv.innerHTML = `<div class="alert alert-danger bg-danger border-0 text-white">${errors}</div>`;
+                showAlert(errors || 'Failed to update profile', 'danger');
             }
         })
-        .catch(err => {
-            alertDiv.innerHTML = `<div class="alert alert-danger bg-danger border-0 text-white">Network error.</div>`;
+        .catch(() => showAlert('Network error.', 'danger'))
+        .finally(() => {
+            btn.disabled = false;
+            btn.innerHTML = '💾 Save Changes';
         });
-    });
+    }
+
+    function changePassword(e) {
+        e.preventDefault();
+
+        const newPassword = document.getElementById('new-password').value;
+        const confirmPassword = document.getElementById('confirm-password').value;
+
+        if (newPassword !== confirmPassword) {
+            showAlert('New passwords do not match!', 'warning');
+            return;
+        }
+        if (newPassword.length < 6) {
+            showAlert('New password must be at least 6 characters', 'warning');
+            return;
+        }
+
+        const btn = e.submitter || e.target.querySelector('[type=submit]');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Changing...';
+
+        fetch(`${API_URL}/deliveryman/profile/change-password`, {
+            method: 'POST',
+            headers: getHeaders(),
+            body: JSON.stringify({
+                current_password: document.getElementById('current-password').value,
+                new_password: newPassword,
+            })
+        })
+        .then(res => res.json().then(data => ({ status: res.status, body: data })))
+        .then(res => {
+            if (res.status === 422) {
+                showAlert('⚠️ ' + (res.body.message || 'Current password is incorrect'), 'danger');
+            } else if (res.status === 200) {
+                showAlert('✅ ' + (res.body.message || 'Password changed successfully'), 'success');
+                e.target.reset();
+            } else {
+                showAlert('Failed to change password', 'danger');
+            }
+        })
+        .catch(() => showAlert('Failed to change password', 'danger'))
+        .finally(() => {
+            btn.disabled = false;
+            btn.innerHTML = '🔑 Change Password';
+        });
+    }
+
+    function toggleStatus() {
+        const btn = document.getElementById('toggle-status-btn');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Updating...';
+
+        fetch(`${API_URL}/deliveryman/profile/toggle-status`, {
+            method: 'POST',
+            headers: getHeaders(),
+        })
+        .then(res => res.json().then(data => ({ status: res.status, body: data })))
+        .then(res => {
+            if (res.status === 200) {
+                showAlert('✅ ' + (res.body.message || 'Status updated successfully'), 'success');
+                loadProfile();
+            } else {
+                showAlert(res.body.message || 'Failed to update status', 'danger');
+            }
+        })
+        .catch(() => showAlert('Failed to update status', 'danger'))
+        .finally(() => {
+            btn.disabled = false;
+        });
+    }
+
+    function showAlert(msg, type) {
+        const el = document.getElementById('profile-alert');
+        el.innerHTML = `<div class="alert alert-${type} alert-dismissible fade show shadow-sm" role="alert">
+            ${msg}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>`;
+        setTimeout(() => { el.innerHTML = ''; }, 5000);
+    }
 </script>
 @endsection

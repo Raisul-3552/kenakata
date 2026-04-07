@@ -34,6 +34,7 @@
         color: #000;
     }
 </style>
+@yield('delivery_styles')
 @endsection
 
 @section('navbar')
