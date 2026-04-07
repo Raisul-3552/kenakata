@@ -87,6 +87,7 @@ Route::middleware('auth:customer')->prefix('customer')->group(function () {
     Route::post('/orders', [CustomerController::class, 'placeOrder']);
     Route::get('/orders', [CustomerController::class, 'getOrderHistory']);
     Route::post('/coupons/validate', [CustomerController::class, 'validateCoupon']);
+    Route::post('/deliveries/{id}/rate', [CustomerController::class, 'rateRider']);
 });
 
 // --- Protected DeliveryMan Routes ---

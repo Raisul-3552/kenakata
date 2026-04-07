@@ -20,11 +20,23 @@
         </div>
 
         <!-- Performance Stats -->
-        <div class="card shadow-sm border-0 bg-gold text-dark mb-4">
-            <div class="card-body text-center py-4">
-                <p class="text-uppercase small fw-bold mb-1 opacity-75">Lifetime Deliveries</p>
-                <h1 id="lifetime-count" class="display-3 fw-bold mb-0">0</h1>
-                <p class="small mb-0">Orders Delivered</p>
+        <div class="row g-3 mb-4">
+            <div class="col-6">
+                <div class="card shadow-sm border-0 bg-gold text-dark h-100">
+                    <div class="card-body text-center py-4">
+                        <p class="text-uppercase small fw-bold mb-1 opacity-75">Deliveries</p>
+                        <h1 id="lifetime-count" class="display-3 fw-bold mb-0 text-white">0</h1>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6">
+                <div class="card shadow-sm border-0 bg-white text-dark h-100">
+                    <div class="card-body text-center py-4">
+                        <p class="text-uppercase small fw-bold mb-1 opacity-75">Avg Rating</p>
+                        <h1 id="avg-rating" class="display-5 fw-bold mb-0">0.0</h1>
+                        <div class="text-warning small">★★★★★</div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -104,6 +116,7 @@
             document.getElementById('display-email').textContent = rider.Email;
             document.getElementById('initial-name').textContent = rider.DelManName.charAt(0).toUpperCase();
             document.getElementById('lifetime-count').textContent = lifetimeCount;
+            document.getElementById('avg-rating').textContent = data.avg_rating || '0.0';
             
             // Status badge logic
             const statusContainer = document.getElementById('status-container');
