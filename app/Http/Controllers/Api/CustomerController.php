@@ -396,4 +396,24 @@ class CustomerController extends Controller
             return response()->json(['message' => 'Failed to add balance: ' . $e->getMessage()], 500);
         }
     }
+    public function rateRider(Request $request, $deliveryId)
+    {
+        $request->validate([
+            'Rating' => 'required|integer|min:1|max:5',
+            'RatingComment' => 'nullable|string|max:500',
+        ]);
+
+        $delivery = \App\Models\Delivery::where('DeliveryID', $deliveryId)
+            ->whereHas('order', function($q) use ($request) {
+                $q->where('CustomerID', $request->user()->CustomerID);
+            })
+            ->firstOrFail();
+
+        $delivery->update([
+            'Rating' => $request->Rating,
+            'RatingComment' => $request->RatingComment,
+        ]);
+
+        return response()->json(['message' => 'Rider rated successfully']);
+    }
 }

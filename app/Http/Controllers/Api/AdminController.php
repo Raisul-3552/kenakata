@@ -28,7 +28,7 @@ class AdminController extends Controller
         $q = $request->query('q');
         $customers = Customer::where('CustomerName', 'LIKE', "%$q%")
             ->orWhere('Email', 'LIKE', "%$q%")
-            ->get(['CustomerID', 'CustomerName', 'Email']);
+            ->get(['CustomerID', 'CustomerName', 'Email', 'Phone', 'Address']);
             
         return response()->json($customers);
     }

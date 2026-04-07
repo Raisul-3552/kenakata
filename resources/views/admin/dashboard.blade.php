@@ -48,6 +48,47 @@
         #addEmployeeCollapse {
             transition: all 0.3s ease-out;
         }
+        .search-results-container {
+            display: none;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+            margin-bottom: 2rem;
+            border-left: 5px solid #1f3bb3;
+            overflow: hidden;
+        }
+        .search-result-item {
+            padding: 12px 20px;
+            cursor: pointer;
+            border-bottom: 1px solid #f0f0f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: background 0.2s;
+        }
+        .search-result-item:last-child {
+            border-bottom: none;
+        }
+        .search-result-item:hover {
+            background-color: #f8fbff;
+        }
+        .search-result-name {
+            font-weight: 600;
+            color: #1f3bb3;
+        }
+        .search-result-email {
+            font-size: 0.85rem;
+            color: #6c757d;
+        }
+        .search-result-badge {
+            font-size: 0.7rem;
+            background: #eef2ff;
+            color: #1f3bb3;
+            padding: 2px 8px;
+            border-radius: 5px;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
 
     </style>
 @endsection
@@ -62,8 +103,8 @@
     </div>
 
     <!-- Add Employee Form (Toggleable) -->
-    <div class="collapse mb-4" id="addEmployeeCollapse">
-        <div class="card border-0 shadow-sm overflow-hidden">
+    <div class="collapse mb-5" id="addEmployeeCollapse">
+        <div class="card border-0 shadow-sm">
             <div class="card-header bg-navy text-white py-3">
                 <h5 class="mb-0 fw-bold">➕ Create New Employee Profile</h5>
             </div>
@@ -73,7 +114,7 @@
                     <div class="row g-4">
                         <div class="col-md-5">
                             <label class="form-label fw-bold text-navy">Employee Name</label>
-                            <input type="text" class="form-control" id="emp_name" placeholder="e.g. John Doe" required>
+                            <input type="text" class="form-control" id="emp_name" placeholder="Type customer name to search..." autocomplete="off" required>
                         </div>
                         <div class="col-md-5">
                             <label class="form-label fw-bold text-navy">Employee Email</label>
@@ -89,6 +130,15 @@
                 </form>
             </div>
         </div>
+    </div>
+
+    <!-- Search Results Section (Shown only when searching) -->
+    <div id="search-results-section" class="search-results-container">
+        <div class="card-header bg-light py-2 px-3 border-bottom d-flex justify-content-between align-items-center">
+            <span class="text-navy fw-bold small"><i class="bi bi-person-search me-1"></i> Matching Customers</span>
+            <button type="button" class="btn-close small" style="font-size: 0.7rem;" onclick="document.getElementById('search-results-section').style.display='none'"></button>
+        </div>
+        <div id="search-results-list"></div>
     </div>
 
     <!-- Employee Table -->
@@ -123,10 +173,63 @@
 @section('scripts')
     <script>
         let employeesData = [];
+        let selectedCustomerData = null;
 
         document.addEventListener('DOMContentLoaded', () => {
             loadEmployees();
+            setupNameSearch();
         });
+
+        function setupNameSearch() {
+            const nameInput = document.getElementById('emp_name');
+            const resultsSection = document.getElementById('search-results-section');
+            const resultsList = document.getElementById('search-results-list');
+
+            nameInput.addEventListener('input', function() {
+                const query = this.value.trim();
+                if (query.length < 2) {
+                    resultsSection.style.display = 'none';
+                    return;
+                }
+
+                fetch(`${API_URL}/admin/customers/search?q=${encodeURIComponent(query)}`, {
+                    headers: getHeaders()
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.length > 0) {
+                        resultsList.innerHTML = data.map(customer => `
+                            <div class="search-result-item" onclick="selectCustomer(${JSON.stringify(customer).replace(/"/g, '&quot;')})">
+                                <div>
+                                    <div class="search-result-name">${customer.CustomerName}</div>
+                                    <div class="search-result-email">${customer.Email}</div>
+                                </div>
+                                <span class="search-result-badge">Select Customer</span>
+                            </div>
+                        `).join('');
+                        resultsSection.style.display = 'block';
+                    } else {
+                        resultsSection.style.display = 'none';
+                    }
+                })
+                .catch(err => {
+                    console.error('Search error:', err);
+                });
+            });
+        }
+
+        function selectCustomer(customer) {
+            document.getElementById('emp_name').value = customer.CustomerName;
+            document.getElementById('emp_email').value = customer.Email;
+            
+            // Store hidden data
+            selectedCustomerData = {
+                Phone: customer.Phone,
+                Address: customer.Address
+            };
+            
+            document.getElementById('search-results-section').style.display = 'none';
+        }
 
         function loadEmployees() {
             const tbody = document.getElementById('employee-list');
@@ -167,12 +270,18 @@
         // Add Employee
         document.getElementById('addEmployeeForm').addEventListener('submit', function (e) {
             e.preventDefault();
-            const alertDiv = document.getElementById('alert-messages');
+            const alertDiv = document.getElementById('alert-messages-top');
 
             const payload = {
                 EmployeeName: document.getElementById('emp_name').value,
                 Email: document.getElementById('emp_email').value,
             };
+
+            // Add background data if a customer was selected
+            if (selectedCustomerData) {
+                payload.Phone = selectedCustomerData.Phone;
+                payload.Address = selectedCustomerData.Address;
+            }
 
             fetch(`${API_URL}/admin/employees`, {
                 method: 'POST',
@@ -182,12 +291,13 @@
                 .then(res => res.json().then(data => ({ status: res.status, body: data })))
                 .then(res => {
                     if (res.status === 201) {
-                        alertDiv.innerHTML = `<div class="alert alert-success">✅ Employee <strong>${payload.EmployeeName}</strong> added successfully!</div>`;
+                        alertDiv.innerHTML = `<div class="alert alert-success alert-dismissible"><button type="button" class="btn-close" data-bs-dismiss="alert"></button>✅ Employee <strong>${payload.EmployeeName}</strong> added successfully!</div>`;
                         document.getElementById('addEmployeeForm').reset();
+                        selectedCustomerData = null; // Clear selection
                         loadEmployees();
                     } else {
                         const errors = res.body.errors ? Object.values(res.body.errors).flat().join('<br>') : res.body.message;
-                        alertDiv.innerHTML = `<div class="alert alert-danger">${errors}</div>`;
+                        alertDiv.innerHTML = `<div class="alert alert-danger alert-dismissible"><button type="button" class="btn-close" data-bs-dismiss="alert"></button>${errors}</div>`;
                     }
                 })
                 .catch(err => {
@@ -206,11 +316,11 @@
             })
                 .then(res => res.json())
                 .then(data => {
-                    alertDiv.innerHTML = `<div class="alert alert-success">✅ Employee <strong>${name}</strong> has been successfully removed.</div>`;
+                    alertDiv.innerHTML = `<div class="alert alert-success alert-dismissible"><button type="button" class="btn-close" data-bs-dismiss="alert"></button>✅ Employee <strong>${name}</strong> has been successfully removed.</div>`;
                     loadEmployees();
                 })
                 .catch(err => {
-                    alertDiv.innerHTML = `<div class="alert alert-danger">Error deleting employee.</div>`;
+                    alertDiv.innerHTML = `<div class="alert alert-danger alert-dismissible"><button type="button" class="btn-close" data-bs-dismiss="alert"></button>Error deleting employee.</div>`;
                 });
         }
     </script>

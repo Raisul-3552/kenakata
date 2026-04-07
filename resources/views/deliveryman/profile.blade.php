@@ -48,34 +48,26 @@
                     <span class="badge badge-role text-white">🚴 Deliveryman</span>
                 </div>
             </div>
-            <div class="section-title">Account Info</div>
-            <div class="info-row">
-                <span class="info-label">📧 Email</span>
-                <span class="info-value" id="profile-email">—</span>
+        </div>
+
+        <!-- Performance Stats -->
+        <div class="row g-3 mb-4">
+            <div class="col-6">
+                <div class="card shadow-sm border-0 bg-gold text-dark h-100">
+                    <div class="card-body text-center py-4">
+                        <p class="text-uppercase small fw-bold mb-1 opacity-75">Deliveries</p>
+                        <h1 id="lifetime-count" class="display-3 fw-bold mb-0 text-white">0</h1>
+                    </div>
+                </div>
             </div>
-            <div class="info-row">
-                <span class="info-label">📱 Phone</span>
-                <span class="info-value" id="profile-phone">—</span>
-            </div>
-            <div class="info-row">
-                <span class="info-label">🏠 Address</span>
-                <span class="info-value" id="profile-address">—</span>
-            </div>
-            <div class="info-row">
-                <span class="info-label">🆔 Rider ID</span>
-                <span class="info-value" id="profile-id">—</span>
-            </div>
-            <div class="info-row mb-3">
-                <span class="info-label">📊 Status</span>
-                <span class="info-value" id="status-text">—</span>
-            </div>
-            <div class="d-grid gap-2">
-                <button type="button" id="toggle-status-btn" class="btn btn-outline-warning" onclick="toggleStatus()">⟳ Toggle Status</button>
-            </div>
-            <hr class="border-light border-opacity-25">
-            <div>
-                <div class="text-white-50 small mb-1">Lifetime Deliveries</div>
-                <div id="lifetime-count" class="h3 fw-bold text-warning mb-0">0</div>
+            <div class="col-6">
+                <div class="card shadow-sm border-0 bg-white text-dark h-100">
+                    <div class="card-body text-center py-4">
+                        <p class="text-uppercase small fw-bold mb-1 opacity-75">Avg Rating</p>
+                        <h1 id="avg-rating" class="display-5 fw-bold mb-0">0.0</h1>
+                        <div class="text-warning small">★★★★★</div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -151,27 +143,22 @@
             const rider = data.rider;
             const lifetimeCount = data.lifetime_deliveries;
 
-            localStorage.setItem('kenakata_user', JSON.stringify(rider));
-
-            document.getElementById('profile-name').textContent = rider.DelManName || '—';
-            document.getElementById('profile-email').textContent = rider.Email || '—';
-            document.getElementById('profile-phone').textContent = rider.Phone || '—';
-            document.getElementById('profile-address').textContent = rider.Address || '—';
-            document.getElementById('profile-id').textContent = '#DEL-' + (rider.DelManID || '?');
-            document.getElementById('status-text').textContent = rider.Status || 'Available';
-            document.getElementById('lifetime-count').textContent = lifetimeCount || 0;
-
-            document.getElementById('edit-name').value = rider.DelManName || '';
-            document.getElementById('edit-phone').value = rider.Phone || '';
-            document.getElementById('edit-address').value = rider.Address || '';
-
-            const initials = (rider.DelManName || 'R').split(' ').map(w => w[0]).join('').toUpperCase().substring(0, 2);
-            document.getElementById('avatar-initials').textContent = initials;
-
-            const btn = document.getElementById('toggle-status-btn');
-            if (rider.Status === 'Available') {
-                btn.className = 'btn btn-outline-warning';
-                btn.textContent = 'Set Busy';
+            // Fill form
+            document.getElementById('profile_name').value = rider.DelManName;
+            document.getElementById('profile_email').value = rider.Email;
+            
+            // Fill display
+            document.getElementById('display-name').textContent = rider.DelManName;
+            document.getElementById('display-email').textContent = rider.Email;
+            document.getElementById('initial-name').textContent = rider.DelManName.charAt(0).toUpperCase();
+            document.getElementById('lifetime-count').textContent = lifetimeCount;
+            document.getElementById('avg-rating').textContent = data.avg_rating || '0.0';
+            
+            // Status badge logic
+            const statusContainer = document.getElementById('status-container');
+            if(rider.Status === 'Available') {
+                statusContainer.className = 'badge rounded-pill bg-success px-4 py-2 mt-2';
+                statusContainer.textContent = 'Available for Task';
             } else {
                 btn.className = 'btn btn-outline-success';
                 btn.textContent = 'Set Available';

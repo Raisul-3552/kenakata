@@ -27,14 +27,12 @@ class DeliveryController extends Controller
             'DeliveryDate' => ($request->DeliveryStatus == 'Delivered' || $request->DeliveryStatus == 'Cancelled') ? now()->format('Y-m-d') : null,
         ]);
 
-        // Keep Order table in sync so employee dashboard reflects final delivery state.
-        if ($request->DeliveryStatus == 'Delivered') {
-            Order::where('OrderID', $delivery->OrderID)->update(['OrderStatus' => 'Delivered']);
-        }
-
-        // If delivered or cancelled, set rider back to Available
+        // If delivered or cancelled, set rider back to Available and sync Order status
         if ($request->DeliveryStatus == 'Delivered' || $request->DeliveryStatus == 'Cancelled') {
             DeliveryMan::where('DelManID', $delivery->DelManID)->update(['Status' => 'Available']);
+            
+            // Sync status to the Order table
+            \App\Models\Order::where('OrderID', $delivery->OrderID)->update(['OrderStatus' => $request->DeliveryStatus]);
         }
 
         return response()->json(['message' => 'Status updated successfully']);
@@ -47,9 +45,14 @@ class DeliveryController extends Controller
             ->where('DeliveryStatus', 'Delivered')
             ->count();
             
+        $avgRating = Delivery::where('DelManID', $rider->DelManID)
+            ->whereNotNull('Rating')
+            ->avg('Rating') ?? 0;
+            
         return response()->json([
             'rider' => $rider,
             'lifetime_deliveries' => $lifetimeDeliveries,
+            'avg_rating' => number_format($avgRating, 1),
         ]);
     }
 

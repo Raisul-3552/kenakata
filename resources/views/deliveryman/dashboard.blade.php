@@ -17,13 +17,17 @@
         <div class="card h-100 border-0 shadow-lg p-4" style="background: rgba(22, 33, 62, 0.4);">
             <h5 class="text-gold mb-3">Today's Performance</h5>
             <div class="row text-center">
-                <div class="col-6">
-                    <div class="h3 fw-bold" id="completed-count">0</div>
-                    <div class="small text-muted">Completed Tasks</div>
+                <div class="col-4">
+                    <div class="h3 fw-bold text-white" id="completed-count">0</div>
+                    <div class="small text-muted">Delivered</div>
                 </div>
-                <div class="col-6 border-start border-white border-opacity-10">
+                <div class="col-4 border-start border-white border-opacity-10">
                     <div class="h3 fw-bold" id="pending-count">0</div>
-                    <div class="small text-muted">Active Tasks</div>
+                    <div class="small text-muted">Active</div>
+                </div>
+                <div class="col-4 border-start border-white border-opacity-10">
+                    <div class="h3 fw-bold text-gold" id="avg-rating">0.0</div>
+                    <div class="small text-muted">Avg Rating</div>
                 </div>
             </div>
         </div>
@@ -65,7 +69,16 @@
 <script>
     document.addEventListener('DOMContentLoaded', () => {
         loadDeliveries();
+        loadRiderStats();
     });
+
+    function loadRiderStats() {
+        fetch(`${API_URL}/deliveryman/profile`, { headers: getHeaders() })
+        .then(res => res.json())
+        .then(data => {
+            document.getElementById('avg-rating').innerText = data.avg_rating || '0.0';
+        });
+    }
 
     function loadDeliveries() {
         fetch(`${API_URL}/deliveryman/deliveries`, {
