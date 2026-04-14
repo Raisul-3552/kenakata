@@ -3,15 +3,6 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\Product;
-use App\Models\ProductDetail;
-use App\Models\Offer;
-use App\Models\Coupon;
-use App\Models\Order;
-use App\Models\Category;
-use App\Models\DeliveryMan;
-use App\Models\Wallet;
-use App\Models\WalletTransaction;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -23,129 +14,426 @@ class EmployeeController extends Controller
 
     private function getOrCreateWallet($customerID)
     {
-        return Wallet::firstOrCreate(
-            ['CustomerID' => $customerID],
-            ['Balance' => 0]
-        );
+        // MSSQL Query: Get or create wallet
+        $wallet = DB::selectOne("
+            SELECT * FROM Wallet WHERE CustomerID = ?
+        ", [$customerID]);
+
+        if (!$wallet) {
+            DB::insert("
+                INSERT INTO Wallet (CustomerID, Balance) VALUES (?, 0)
+            ", [$customerID]);
+            $wallet = DB::selectOne("
+                SELECT * FROM Wallet WHERE CustomerID = ?
+            ", [$customerID]);
+        }
+
+        return $wallet;
+    }
+
+    private function getLeastBusyEmployeeId()
+    {
+        $employee = DB::selectOne("\n            SELECT TOP 1 e.EmployeeID\n            FROM Employee e\n            LEFT JOIN [Order] o\n                ON e.EmployeeID = o.EmployeeID\n               AND o.OrderStatus NOT IN ('Delivered', 'Cancelled')\n            GROUP BY e.EmployeeID\n            ORDER BY COUNT(o.OrderID) ASC, e.EmployeeID ASC\n        ");
+
+        return $employee ? (int) $employee->EmployeeID : null;
+    }
+
+    private function rebalancePendingOrders()
+    {
+        $employees = DB::select("SELECT EmployeeID FROM Employee ORDER BY EmployeeID");
+
+        if (empty($employees)) {
+            return;
+        }
+
+        $activeCounts = [];
+        $currentCounts = DB::select("\n            SELECT EmployeeID, COUNT(*) as ActiveCount\n            FROM [Order]\n            WHERE EmployeeID IS NOT NULL\n              AND OrderStatus NOT IN ('Delivered', 'Cancelled')\n            GROUP BY EmployeeID\n        ");
+
+        foreach ($currentCounts as $row) {
+            $activeCounts[(int) $row->EmployeeID] = (int) $row->ActiveCount;
+        }
+
+        $pendingOrders = DB::select("\n            SELECT OrderID\n            FROM [Order]\n            WHERE OrderStatus = 'Pending'\n            ORDER BY OrderID ASC\n        ");
+
+        foreach ($pendingOrders as $order) {
+            $leastBusyEmployeeId = null;
+            $leastCount = null;
+
+            foreach ($employees as $employee) {
+                $employeeId = (int) $employee->EmployeeID;
+                $count = $activeCounts[$employeeId] ?? 0;
+
+                if ($leastBusyEmployeeId === null || $count < $leastCount || ($count === $leastCount && $employeeId < $leastBusyEmployeeId)) {
+                    $leastBusyEmployeeId = $employeeId;
+                    $leastCount = $count;
+                }
+            }
+
+            if ($leastBusyEmployeeId !== null) {
+                DB::update("\n                    UPDATE [Order]\n                    SET EmployeeID = ?\n                    WHERE OrderID = ?\n                ", [$leastBusyEmployeeId, $order->OrderID]);
+
+                $activeCounts[$leastBusyEmployeeId] = ($activeCounts[$leastBusyEmployeeId] ?? 0) + 1;
+            }
+        }
     }
 
     public function getProducts()
     {
-        return response()->json(Product::with([
-            'category',
-            'detail',
-            'offers' => function ($query) {
-                $query->orderByDesc('StartDate');
-            },
-        ])->get());
+        // MSSQL Query: Get all products with category and details (no LEFT JOIN duplication)
+        $products = DB::select("
+            SELECT 
+                p.ProductID, p.EmployeeID, p.CategoryID, p.ProductName, p.Brand, p.Price, p.Stock,
+                c.CategoryName, c.Description as CategoryDescription,
+                COALESCE(pd.Description, NULL) as DetailDescription,
+                COALESCE(pd.Specification, NULL) as Specification,
+                COALESCE(pd.Warranty, NULL) as Warranty,
+                COALESCE(pd.Image, NULL) as Image
+            FROM Product p
+            INNER JOIN Category c ON p.CategoryID = c.CategoryID
+            LEFT JOIN ProductDetails pd ON p.ProductID = pd.ProductID
+            ORDER BY p.ProductName
+        ");
+
+        // Get all offers separately
+        $offers = DB::select("
+            SELECT * FROM Offer
+        ");
+
+        // Map products with offers
+        $result = array_map(function ($product) use ($offers) {
+            // Find offers for this product
+            $productOffers = array_filter($offers, function ($offer) use ($product) {
+                return $offer->ProductID == $product->ProductID;
+            });
+
+            return [
+                'ProductID' => $product->ProductID,
+                'EmployeeID' => $product->EmployeeID,
+                'CategoryID' => $product->CategoryID,
+                'ProductName' => $product->ProductName,
+                'Brand' => $product->Brand,
+                'Price' => floatval($product->Price),
+                'Stock' => intval($product->Stock),
+                'category' => [
+                    'CategoryID' => $product->CategoryID,
+                    'CategoryName' => $product->CategoryName,
+                    'Description' => $product->CategoryDescription,
+                ],
+                'detail' => [
+                    'Image' => $product->Image,
+                    'Description' => $product->DetailDescription,
+                    'Specification' => $product->Specification,
+                    'Warranty' => $product->Warranty,
+                ],
+                'offers' => array_values($productOffers),
+            ];
+        }, $products);
+        
+        return response()->json($result);
     }
 
     public function addProduct(Request $request)
     {
-        $product = Product::create([
-            'EmployeeID' => $request->user()->EmployeeID,
-            'CategoryID' => $request->CategoryID,
-            'ProductName' => $request->ProductName,
-            'Brand' => $request->Brand,
-            'Price' => $request->Price,
-            'Stock' => $request->Stock,
-        ]);
+        DB::beginTransaction();
+        try {
+            // MSSQL Query: Insert product
+            DB::insert("
+                INSERT INTO Product (EmployeeID, CategoryID, ProductName, Brand, Price, Stock)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ", [
+                $request->user()->EmployeeID,
+                $request->CategoryID,
+                $request->ProductName,
+                $request->Brand,
+                $request->Price,
+                $request->Stock,
+            ]);
 
-        ProductDetail::create([
-            'ProductID' => $product->ProductID,
-            'Description' => $request->Description,
-            'Specification' => $request->Specification,
-            'Warranty' => $request->Warranty,
-            'Image' => $request->Image,
-        ]);
+            // Get the product ID
+            $product = DB::selectOne("
+                SELECT TOP 1 * FROM Product WHERE EmployeeID = ? AND ProductName = ? ORDER BY ProductID DESC
+            ", [$request->user()->EmployeeID, $request->ProductName]);
 
-        return response()->json($product, 201);
+            // MSSQL Query: Insert product details
+            DB::insert("
+                INSERT INTO ProductDetails (ProductID, Description, Specification, Warranty, Image)
+                VALUES (?, ?, ?, ?, ?)
+            ", [
+                $product->ProductID,
+                $request->Description,
+                $request->Specification,
+                $request->Warranty,
+                $request->Image,
+            ]);
+
+            DB::commit();
+            return response()->json($product, 201);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['message' => $e->getMessage()], 500);
+        }
     }
 
     public function editProduct(Request $request, $id)
     {
-        $product = Product::where('ProductID', $id)->first();
-        $product->update($request->only(['ProductName', 'Brand', 'Price', 'Stock', 'CategoryID']));
+        // MSSQL Query: Update product
+        DB::update("
+            UPDATE Product
+            SET ProductName = ?, Brand = ?, Price = ?, Stock = ?, CategoryID = ?
+            WHERE ProductID = ?
+        ", [
+            $request->ProductName,
+            $request->Brand,
+            $request->Price,
+            $request->Stock,
+            $request->CategoryID,
+            $id,
+        ]);
         
-        $detail = ProductDetail::where('ProductID', $id)->first();
-        $detail->update($request->only(['Description', 'Specification', 'Warranty', 'Image']));
+        // MSSQL Query: Update product details
+        DB::update("
+            UPDATE ProductDetails
+            SET Description = ?, Specification = ?, Warranty = ?, Image = ?
+            WHERE ProductID = ?
+        ", [
+            $request->Description,
+            $request->Specification,
+            $request->Warranty,
+            $request->Image,
+            $id,
+        ]);
+
+        // Get updated product
+        $product = DB::selectOne("
+            SELECT * FROM Product WHERE ProductID = ?
+        ", [$id]);
 
         return response()->json($product);
     }
 
     public function deleteProduct($id)
     {
-        Product::where('ProductID', $id)->delete();
+        // MSSQL Query: Delete product (cascade deletes ProductDetails)
+        DB::delete("DELETE FROM Product WHERE ProductID = ?", [$id]);
         return response()->json(['message' => 'Product deleted successfully']);
     }
 
     public function addOffer(Request $request)
     {
-        $offer = Offer::updateOrCreate(
-            ['ProductID' => $request->ProductID],
-            [
-                'DiscountAmount' => $request->DiscountAmount,
-                'StartDate' => $request->StartDate,
-                'EndDate' => $request->EndDate,
-            ]
-        );
+        // MSSQL Query: Check if offer exists
+        $existingOffer = DB::selectOne("
+            SELECT * FROM Offer WHERE ProductID = ?
+        ", [$request->ProductID]);
+
+        if ($existingOffer) {
+            // Update existing offer
+            DB::update("
+                UPDATE Offer
+                SET DiscountAmount = ?, StartDate = ?, EndDate = ?
+                WHERE ProductID = ?
+            ", [
+                $request->DiscountAmount,
+                $request->StartDate,
+                $request->EndDate,
+                $request->ProductID,
+            ]);
+            $offer = DB::selectOne("
+                SELECT * FROM Offer WHERE ProductID = ?
+            ", [$request->ProductID]);
+        } else {
+            // Insert new offer
+            DB::insert("
+                INSERT INTO Offer (ProductID, DiscountAmount, StartDate, EndDate)
+                VALUES (?, ?, ?, ?)
+            ", [
+                $request->ProductID,
+                $request->DiscountAmount,
+                $request->StartDate,
+                $request->EndDate,
+            ]);
+            $offer = DB::selectOne("
+                SELECT * FROM Offer WHERE ProductID = ? ORDER BY OfferID DESC
+            ", [$request->ProductID]);
+        }
 
         return response()->json($offer, 201);
     }
 
     public function addCoupon(Request $request)
     {
-        $coupon = Coupon::create($request->all());
+        // MSSQL Query: Insert coupon
+        DB::insert("
+            INSERT INTO Coupon (CouponCode, DiscountAmount, StartDate, EndDate)
+            VALUES (?, ?, ?, ?)
+        ", [
+            $request->CouponCode,
+            $request->DiscountAmount,
+            $request->StartDate,
+            $request->EndDate,
+        ]);
+
+        // Get inserted coupon
+        $coupon = DB::selectOne("
+            SELECT * FROM Coupon WHERE CouponCode = ?
+        ", [$request->CouponCode]);
+
         return response()->json($coupon, 201);
     }
 
     public function getOrders()
     {
-        return response()->json(Order::with(['customer', 'items.product', 'delivery.deliveryMan'])->get());
+        $this->rebalancePendingOrders();
+
+        $employeeId = request()->user()->EmployeeID;
+
+        // MSSQL Query: Get only this employee's assigned orders with customer info
+        $orders = DB::select("\n            SELECT \n                o.OrderID, o.CustomerID, o.EmployeeID, o.CouponID, o.OrderStatus, \n                o.TotalAmount, o.OrderDate, o.Address,\n                c.CustomerName, c.Phone, c.Email\n            FROM [Order] o\n            INNER JOIN Customer c ON o.CustomerID = c.CustomerID\n            WHERE o.EmployeeID = ?\n            ORDER BY o.OrderDate DESC\n        ", [$employeeId]);
+
+        // For each order, fetch items and delivery info separately
+        $result = array_map(function ($order) {
+            // Get order items
+            $items = DB::select("
+                SELECT oi.*, p.ProductName, p.Price
+                FROM OrderItem oi
+                INNER JOIN Product p ON oi.ProductID = p.ProductID
+                WHERE oi.OrderID = ?
+            ", [$order->OrderID]);
+
+            // Get delivery info if exists
+            $delivery = DB::selectOne("
+                SELECT d.*, dm.DelManName
+                FROM Delivery d
+                LEFT JOIN DeliveryMan dm ON d.DelManID = dm.DelManID
+                WHERE d.OrderID = ?
+            ", [$order->OrderID]);
+
+            return [
+                'OrderID' => $order->OrderID,
+                'CustomerID' => $order->CustomerID,
+                'CustomerName' => $order->CustomerName,
+                'customer' => [
+                    'CustomerID' => $order->CustomerID,
+                    'CustomerName' => $order->CustomerName,
+                    'Phone' => $order->Phone,
+                    'Email' => $order->Email,
+                ],
+                'Email' => $order->Email,
+                'EmployeeID' => $order->EmployeeID,
+                'CouponID' => $order->CouponID,
+                'OrderStatus' => $order->OrderStatus,
+                'TotalAmount' => floatval($order->TotalAmount),
+                'OrderDate' => $order->OrderDate,
+                'Address' => $order->Address,
+                'items' => $items,
+                'delivery' => $delivery ? [
+                    'DeliveryID' => $delivery->DeliveryID,
+                    'OrderID' => $delivery->OrderID,
+                    'DelManID' => $delivery->DelManID,
+                    'DeliveryStatus' => $delivery->DeliveryStatus,
+                    'DeliveryDate' => $delivery->DeliveryDate,
+                    'delivery_man' => [
+                        'DelManID' => $delivery->DelManID,
+                        'DelManName' => $delivery->DelManName,
+                    ],
+                ] : null,
+            ];
+        }, $orders);
+
+        return response()->json($result);
     }
 
     public function confirmOrder($id, Request $request)
     {
-        // Using Stored Procedure defined in Step 1
-        DB::statement('EXEC ConfirmOrder ?, ?', [$id, $request->user()->EmployeeID]);
-        return response()->json(['message' => 'Order confirmed successfully']);
+        DB::beginTransaction();
+
+        try {
+            $order = DB::selectOne("\n                SELECT * FROM [Order] WHERE OrderID = ?\n            ", [$id]);
+
+            if (!$order) {
+                DB::rollBack();
+                return response()->json(['message' => 'Order not found'], 404);
+            }
+
+            if ($order->OrderStatus !== 'Pending') {
+                DB::rollBack();
+                return response()->json(['message' => 'Only pending orders can be confirmed'], 400);
+            }
+
+            $employeeId = $order->EmployeeID ? (int) $order->EmployeeID : $this->getLeastBusyEmployeeId();
+
+            if (!$employeeId) {
+                DB::rollBack();
+                return response()->json(['message' => 'No employees are available to handle the order right now.'], 422);
+            }
+
+            DB::update("\n                UPDATE [Order]\n                SET OrderStatus = 'Confirmed', EmployeeID = ?\n                WHERE OrderID = ?\n            ", [$employeeId, $id]);
+
+            DB::commit();
+
+            return response()->json([
+                'message' => 'Order confirmed successfully',
+                'EmployeeID' => $employeeId,
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['message' => $e->getMessage()], 500);
+        }
     }
 
     public function cancelOrder($id)
     {
         DB::beginTransaction();
         try {
-            $order = Order::with('items')->find($id);
+            // MSSQL Query: Get order with items
+            $order = DB::selectOne("
+                SELECT * FROM [Order] WHERE OrderID = ?
+            ", [$id]);
+
             if (!$order) {
                 DB::rollBack();
                 return response()->json(['message' => 'Order not found'], 404);
             }
+
             if ($order->OrderStatus !== 'Cancelled') {
-                foreach ($order->items as $item) {
-                    $product = Product::find($item->ProductID);
-                    if ($product) {
-                        $product->Stock += $item->Quantity;
-                        $product->save();
-                    }
+                // MSSQL Query: Get order items
+                $items = DB::select("
+                    SELECT * FROM OrderItem WHERE OrderID = ?
+                ", [$id]);
+
+                // Restore product stock
+                foreach ($items as $item) {
+                    DB::update("
+                        UPDATE Product SET Stock = Stock + ? WHERE ProductID = ?
+                    ", [$item->Quantity, $item->ProductID]);
                 }
 
+                // Get or create wallet
                 $wallet = $this->getOrCreateWallet($order->CustomerID);
                 $refundAmount = (float) $order->TotalAmount;
 
-                $wallet->Balance += $refundAmount;
-                $wallet->save();
+                // Update wallet balance
+                DB::update("
+                    UPDATE Wallet SET Balance = Balance + ? WHERE WalletID = ?
+                ", [$refundAmount, $wallet->WalletID]);
 
-                WalletTransaction::create([
-                    'WalletID' => $wallet->WalletID,
-                    'Amount' => $refundAmount,
-                    'TransactionType' => 'Credit',
-                    'Description' => 'Refund for cancelled Order #' . $order->OrderID,
-                    'TransactionDate' => now(),
+                // Insert wallet transaction
+                DB::insert("
+                    INSERT INTO WalletTransaction (WalletID, Amount, TransactionType, Description, TransactionDate)
+                    VALUES (?, ?, ?, ?, ?)
+                ", [
+                    $wallet->WalletID,
+                    $refundAmount,
+                    'Credit',
+                    'Refund for cancelled Order #' . $order->OrderID,
+                    now(),
                 ]);
 
-                $order->OrderStatus = 'Cancelled';
-                $order->save();
+                // Update order status
+                DB::update("
+                    UPDATE [Order] SET OrderStatus = 'Cancelled' WHERE OrderID = ?
+                ", [$id]);
             }
+
             DB::commit();
             return response()->json(['message' => 'Order cancelled successfully']);
         } catch (\Exception $e) {
@@ -156,12 +444,22 @@ class EmployeeController extends Controller
 
     public function getAvailableDeliveryMen()
     {
-        return response()->json(DeliveryMan::where('Status', 'Available')->get());
+        // MSSQL Query: Get available delivery men
+        $deliveryMen = DB::select("
+            SELECT * FROM DeliveryMan WHERE Status = 'Available'
+        ");
+
+        return response()->json($deliveryMen);
     }
 
     public function getDeliveryMen()
     {
-        return response()->json(DeliveryMan::orderByDesc('DelManID')->get());
+        // MSSQL Query: Get all delivery men ordered by ID
+        $deliveryMen = DB::select("
+            SELECT * FROM DeliveryMan ORDER BY DelManID DESC
+        ");
+
+        return response()->json($deliveryMen);
     }
 
     public function addDeliveryMan(Request $request)
@@ -178,54 +476,100 @@ class EmployeeController extends Controller
             return response()->json(['errors' => ['Email' => ['This email is already registered.']]], 422);
         }
 
-        $deliveryMan = DeliveryMan::create([
-            'DelManName' => $request->DelManName,
-            'Phone' => $request->Phone,
-            'Email' => $request->Email,
-            'Password' => Hash::make($request->Password ?? 'password'),
-            'Address' => $request->Address,
-            'Status' => $request->Status ?? 'Available',
+        $hashedPassword = Hash::make($request->Password ?? 'password');
+        
+        // MSSQL Query: Insert delivery man
+        DB::insert("
+            INSERT INTO DeliveryMan (DelManName, Phone, Email, Password, Address, Status)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ", [
+            $request->DelManName,
+            $request->Phone,
+            $request->Email,
+            $hashedPassword,
+            $request->Address,
+            $request->Status ?? 'Available',
         ]);
+
+        // Get inserted delivery man
+        $deliveryMan = DB::selectOne("
+            SELECT * FROM DeliveryMan WHERE Email = ?
+        ", [$request->Email]);
 
         return response()->json($deliveryMan, 201);
     }
 
     public function deleteDeliveryMan($id)
     {
-        $deliveryMan = DeliveryMan::where('DelManID', $id)->first();
+        // MSSQL Query: Check if delivery man exists
+        $deliveryMan = DB::selectOne("
+            SELECT * FROM DeliveryMan WHERE DelManID = ?
+        ", [$id]);
+
         if (!$deliveryMan) {
             return response()->json(['message' => 'Deliveryman not found'], 404);
         }
 
-        $hasActiveDelivery = $deliveryMan->deliveries()
-            ->whereIn('DeliveryStatus', ['Pending', 'In Progress'])
-            ->exists();
+        // MSSQL Query: Check for active deliveries
+        $activeDeliveries = DB::selectOne("
+            SELECT COUNT(*) as count FROM Delivery 
+            WHERE DelManID = ? AND DeliveryStatus IN ('Pending', 'In Progress')
+        ", [$id]);
 
-        if ($hasActiveDelivery) {
+        if ($activeDeliveries->count > 0) {
             return response()->json(['message' => 'Cannot delete a deliveryman with active deliveries.'], 422);
         }
 
-        $deliveryMan->delete();
+        // MSSQL Query: Delete delivery man
+        DB::delete("DELETE FROM DeliveryMan WHERE DelManID = ?", [$id]);
 
         return response()->json(['message' => 'Deliveryman deleted successfully']);
     }
 
     public function getAllDeliveryMenStatus()
     {
-        $deliveryMen = DeliveryMan::with(['deliveries' => function ($query) {
-            $query->whereIn('DeliveryStatus', ['Pending', 'In Progress'])
-                  ->with('order.customer');
-        }])->get();
-        return response()->json($deliveryMen);
+        // MSSQL Query: Get all delivery men
+        $deliveryMen = DB::select("
+            SELECT DelManID, DelManName, Phone, Address, Status
+            FROM DeliveryMan
+            ORDER BY DelManID
+        ");
+
+        // For each delivery man, fetch their active deliveries
+        $result = array_map(function ($dm) {
+            // Get active deliveries for this delivery man
+            $deliveries = DB::select("
+                SELECT 
+                    d.DeliveryID, d.OrderID, d.DeliveryStatus,
+                    o.TotalAmount, o.Address as CustomerAddress, c.CustomerName, c.Phone as CustomerPhone
+                FROM Delivery d
+                INNER JOIN [Order] o ON d.OrderID = o.OrderID
+                INNER JOIN Customer c ON o.CustomerID = c.CustomerID
+                WHERE d.DelManID = ? AND d.DeliveryStatus IN ('Pending', 'In Progress')
+            ", [$dm->DelManID]);
+
+            return [
+                'DelManID' => $dm->DelManID,
+                'DelManName' => $dm->DelManName,
+                'Phone' => $dm->Phone,
+                'Address' => $dm->Address,
+                'Status' => $dm->Status,
+                'activeDeliveries' => $deliveries,
+            ];
+        }, $deliveryMen);
+
+        return response()->json($result);
     }
 
     public function assignDelivery($id, Request $request)
     {
-        // Using Stored Procedure defined in Step 1
+        // MSSQL Stored Procedure: AssignDelivery
         DB::statement('EXEC AssignDelivery ?, ?', [$id, $request->DelManID]);
         
         // Update DeliveryMan status to Busy
-        DeliveryMan::where('DelManID', $request->DelManID)->update(['Status' => 'Busy']);
+        DB::update("
+            UPDATE DeliveryMan SET Status = 'Busy' WHERE DelManID = ?
+        ", [$request->DelManID]);
         
         return response()->json(['message' => 'Delivery assigned successfully']);
     }
@@ -239,8 +583,23 @@ class EmployeeController extends Controller
     public function updateProfile(Request $request)
     {
         $employee = $request->user();
-        $employee->update($request->only(['EmployeeName', 'Phone', 'Address']));
-        return response()->json(['message' => 'Profile updated successfully', 'employee' => $employee]);
+        
+        // MSSQL Query: Update employee profile
+        DB::update("
+            UPDATE Employee SET EmployeeName = ?, Phone = ?, Address = ? WHERE EmployeeID = ?
+        ", [
+            $request->EmployeeName,
+            $request->Phone,
+            $request->Address,
+            $employee->EmployeeID,
+        ]);
+
+        // Get updated employee
+        $updatedEmployee = DB::selectOne("
+            SELECT * FROM Employee WHERE EmployeeID = ?
+        ", [$employee->EmployeeID]);
+
+        return response()->json(['message' => 'Profile updated successfully', 'employee' => $updatedEmployee]);
     }
 
     public function changePassword(Request $request)
@@ -252,8 +611,13 @@ class EmployeeController extends Controller
         }
 
         $request->validate(['new_password' => 'required|string|min:6']);
-        $employee->Password = Hash::make($request->new_password);
-        $employee->save();
+        
+        $hashedPassword = Hash::make($request->new_password);
+        
+        // MSSQL Query: Update employee password
+        DB::update("
+            UPDATE Employee SET Password = ? WHERE EmployeeID = ?
+        ", [$hashedPassword, $employee->EmployeeID]);
 
         return response()->json(['message' => 'Password changed successfully']);
     }
@@ -261,24 +625,39 @@ class EmployeeController extends Controller
     // --- Offers ---
     public function getOffers()
     {
-        return response()->json(Offer::with('product')->get());
+        // MSSQL Query: Get all offers with product info
+        $offers = DB::select("
+            SELECT o.OfferID, o.ProductID, o.DiscountAmount, o.StartDate, o.EndDate,
+                   p.ProductName, p.Brand, p.Price
+            FROM Offer o
+            INNER JOIN Product p ON o.ProductID = p.ProductID
+        ");
+
+        return response()->json($offers);
     }
 
     public function deleteOffer($id)
     {
-        Offer::where('OfferID', $id)->delete();
+        // MSSQL Query: Delete offer
+        DB::delete("DELETE FROM Offer WHERE OfferID = ?", [$id]);
         return response()->json(['message' => 'Offer removed successfully']);
     }
 
     // --- Coupons ---
     public function getCoupons()
     {
-        return response()->json(Coupon::all());
+        // MSSQL Query: Get all coupons
+        $coupons = DB::select("
+            SELECT * FROM Coupon ORDER BY CouponID DESC
+        ");
+
+        return response()->json($coupons);
     }
 
     public function deleteCoupon($id)
     {
-        Coupon::where('CouponID', $id)->delete();
+        // MSSQL Query: Delete coupon
+        DB::delete("DELETE FROM Coupon WHERE CouponID = ?", [$id]);
         return response()->json(['message' => 'Coupon deleted successfully']);
     }
 
@@ -297,17 +676,28 @@ class EmployeeController extends Controller
             ['CategoryName' => 'Computers', 'Description' => 'Laptops, desktops and computer accessories'],
         ];
 
-        $existingNames = Category::query()
-            ->pluck('CategoryName')
-            ->map(fn ($name) => strtolower(trim((string) $name)))
-            ->toArray();
+        // MSSQL Query: Get existing category names
+        $existingCategories = DB::select("
+            SELECT LOWER(TRIM(CategoryName)) as CategoryName FROM Category
+        ");
 
+        $existingNames = array_map(fn($cat) => $cat->CategoryName, $existingCategories);
+
+        // MSSQL Query: Insert missing categories
         foreach ($defaultCategories as $category) {
-            if (!in_array(strtolower($category['CategoryName']), $existingNames, true)) {
-                Category::create($category);
+            $categoryNameLower = strtolower(trim($category['CategoryName']));
+            if (!in_array($categoryNameLower, $existingNames, true)) {
+                DB::insert("
+                    INSERT INTO Category (CategoryName, Description) VALUES (?, ?)
+                ", [$category['CategoryName'], $category['Description']]);
             }
         }
 
-        return response()->json(Category::orderBy('CategoryName')->get());
+        // MSSQL Query: Get all categories ordered by name
+        $categories = DB::select("
+            SELECT * FROM Category ORDER BY CategoryName
+        ");
+
+        return response()->json($categories);
     }
 }

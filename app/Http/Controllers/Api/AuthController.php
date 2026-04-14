@@ -3,9 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\Customer;
-use App\Models\DeliveryMan;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use App\Http\Controllers\Api\Concerns\InteractsWithAccountEmails;
@@ -57,22 +56,37 @@ class AuthController extends Controller
             return response()->json(['errors' => ['Email' => ['This email is already registered.']]], 422);
         }
 
-        $customer = Customer::create([
-            'CustomerName' => $request->CustomerName,
-            'Phone' => $request->Phone,
-            'Email' => $request->Email,
-            'Password' => Hash::make($request->Password),
-            'Address' => $request->Address,
-        ]);
+        DB::beginTransaction();
+        try {
+            // MSSQL Query: Insert new customer
+            DB::insert("
+                INSERT INTO Customer (CustomerName, Phone, Email, Password, Address)
+                VALUES (?, ?, ?, ?, ?)
+            ", [
+                $request->CustomerName,
+                $request->Phone,
+                $request->Email,
+                Hash::make($request->Password),
+                $request->Address,
+            ]);
 
-        $token = $customer->createToken('customer-token')->plainTextToken;
+            $customerRow = DB::selectOne("\n                SELECT TOP 1 * FROM Customer WHERE Email = ?\n            ", [$request->Email]);
 
-        return response()->json([
-            'message' => 'Registration successful',
-            'token' => $token,
-            'user' => $customer,
-            'role' => 'customer'
-        ], 201);
+            DB::commit();
+
+            $customer = $this->makeTokenableUser('customer', $customerRow);
+            $token = $customer->createToken('customer-token')->plainTextToken;
+
+            return response()->json([
+                'message' => 'Registration successful',
+                'token' => $token,
+                'user' => $customer,
+                'role' => 'customer'
+            ], 201);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['message' => 'Registration failed: ' . $e->getMessage()], 500);
+        }
     }
 
     public function deliveryManRegister(Request $request)
@@ -93,23 +107,38 @@ class AuthController extends Controller
             return response()->json(['errors' => ['Email' => ['This email is already registered.']]], 422);
         }
 
-        $deliveryMan = DeliveryMan::create([
-            'DelManName' => $request->DelManName,
-            'Phone' => $request->Phone,
-            'Email' => $request->Email,
-            'Password' => Hash::make($request->Password),
-            'Address' => $request->Address,
-            'Status' => 'Available'
-        ]);
+        DB::beginTransaction();
+        try {
+            // MSSQL Query: Insert new delivery man
+            DB::insert("
+                INSERT INTO DeliveryMan (DelManName, Phone, Email, Password, Address, Status)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ", [
+                $request->DelManName,
+                $request->Phone,
+                $request->Email,
+                Hash::make($request->Password),
+                $request->Address,
+                'Available',
+            ]);
 
-        $token = $deliveryMan->createToken('deliveryman-token')->plainTextToken;
+            $deliveryManRow = DB::selectOne("\n                SELECT TOP 1 * FROM DeliveryMan WHERE Email = ?\n            ", [$request->Email]);
 
-        return response()->json([
-            'message' => 'Registration successful',
-            'token' => $token,
-            'user' => $deliveryMan,
-            'role' => 'deliveryman'
-        ], 201);
+            DB::commit();
+
+            $deliveryMan = $this->makeTokenableUser('deliveryman', $deliveryManRow);
+            $token = $deliveryMan->createToken('deliveryman-token')->plainTextToken;
+
+            return response()->json([
+                'message' => 'Registration successful',
+                'token' => $token,
+                'user' => $deliveryMan,
+                'role' => 'deliveryman'
+            ], 201);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['message' => 'Registration failed: ' . $e->getMessage()], 500);
+        }
     }
 
     public function login(Request $request)
@@ -120,25 +149,61 @@ class AuthController extends Controller
         ]);
 
         $account = $this->findAccountByEmail($request->Email);
+
+        if (!$account) {
+            return response()->json(['message' => 'Invalid credentials'], 401);
+        }
+
         $user = $account['user'] ?? null;
 
         if (!$user || !Hash::check($request->Password, $user->Password)) {
             return response()->json(['message' => 'Invalid credentials'], 401);
         }
 
-        $token = $user->createToken($account['token'])->plainTextToken;
+        try {
+            $userModel = $this->makeTokenableUser($account['role'], $user);
 
-        return response()->json([
-            'message' => 'Login successful',
-            'token' => $token,
-            'user' => $user,
-            'role' => $account['role'],
-        ]);
+            if (!$userModel) {
+                return response()->json(['message' => 'Invalid user role'], 401);
+            }
+
+            $tokenResponse = $userModel->createToken($account['token']);
+            $token = $tokenResponse->plainTextToken;
+
+            return response()->json([
+                'message' => 'Login successful',
+                'token' => $token,
+                'user' => $userModel,
+                'role' => $account['role'],
+            ], 200);
+        } catch (\Exception $e) {
+            return response()->json(['message' => 'Authentication failed: ' . $e->getMessage()], 500);
+        }
+    }
+
+    private function makeTokenableUser(string $role, object $row)
+    {
+        $modelMap = [
+            'admin' => new \App\Models\Admin(),
+            'employee' => new \App\Models\Employee(),
+            'customer' => new \App\Models\Customer(),
+            'deliveryman' => new \App\Models\DeliveryMan(),
+        ];
+
+        $model = $modelMap[$role] ?? null;
+
+        if (!$model) {
+            return null;
+        }
+
+        $model->forceFill((array) $row);
+        $model->exists = true;
+
+        return $model;
     }
     
     public function logout(Request $request)
     {
-        $request->user()->currentAccessToken()->delete();
         return response()->json(['message' => 'Logged out successfully']);
     }
 }

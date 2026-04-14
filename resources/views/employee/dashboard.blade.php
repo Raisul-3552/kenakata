@@ -137,7 +137,7 @@
                     const statusClass = getStatusClass(effectiveStatus);
                     const riderName = order.delivery && order.delivery.delivery_man ? 
                         `<span class="text-info"><i class="bi bi-person-badge me-1"></i>${order.delivery.delivery_man.DelManName}</span>` : 
-                        '<span class="text-muted small">Not Assigned</span>';
+                        '<span class="text-white small fw-semibold">Not Assigned</span>';
                     const actions = getActionsHtml(order);
 
                     return `
@@ -217,20 +217,17 @@
         .then(data => {
             console.log('Order confirmed:', data);
             
-            const alertDiv = document.getElementById('alert-messages');
-            alertDiv.innerHTML = `<div class="alert alert-success border-0 shadow-sm py-3">✅ Order <strong>#ORD-${id}</strong> has been confirmed. Please assign a rider now.</div>`;
+            showOrderAlert(`✅ Order <strong>#ORD-${id}</strong> has been confirmed. Please assign a rider now.`, 'success');
             
             loadOrders();
             // Automatically trigger rider assignment
             setTimeout(() => {
                 openAssignModal(id);
-                // Clear message after 10 seconds
-                setTimeout(() => { alertDiv.innerHTML = ''; }, 10000);
             }, 500);
         })
         .catch(err => {
             console.error('Confirmation error:', err);
-            alert('Failed to confirm order');
+            showOrderAlert('Failed to confirm order', 'danger');
             if(btn) {
                 btn.innerHTML = '✅ Confirm';
                 btn.disabled = false;
@@ -254,15 +251,13 @@
         .then(res => res.json())
         .then(data => {
             console.log('Order cancelled:', data);
-            const alertDiv = document.getElementById('alert-messages');
-            alertDiv.innerHTML = `<div class="alert alert-danger border-0 shadow-sm py-3">❌ Order <strong>#ORD-${id}</strong> has been cancelled.</div>`;
+            showOrderAlert(`❌ Order <strong>#ORD-${id}</strong> has been cancelled.`, 'danger');
             
             loadOrders();
-            setTimeout(() => { alertDiv.innerHTML = ''; }, 5000);
         })
         .catch(err => {
             console.error('Cancellation error:', err);
-            alert('Failed to cancel order');
+            showOrderAlert('Failed to cancel order', 'danger');
             if(btn) {
                 btn.innerHTML = '❌ Cancel';
                 btn.disabled = false;
@@ -315,7 +310,7 @@
         const delManId = selectElement.value;
         
         if(!delManId) {
-            alert('Please select a rider from the list');
+            showOrderAlert('Please select a rider from the list', 'warning');
             return;
         }
 
@@ -360,10 +355,28 @@
         })
         .catch(err => {
             console.error('Assignment error:', err);
-            alert('Could not assign rider');
+            showOrderAlert('Could not assign rider', 'danger');
             btn.innerHTML = 'Assign Now';
             btn.disabled = false;
         });
+    }
+
+    function showOrderAlert(message, type) {
+        const alertDiv = document.getElementById('alert-messages');
+        if (!alertDiv) return;
+
+        alertDiv.innerHTML = `
+            <div class="alert alert-${type} border-0 shadow-sm alert-dismissible fade show py-3" role="alert">
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        `;
+
+        setTimeout(() => {
+            if (alertDiv.innerHTML) {
+                alertDiv.innerHTML = '';
+            }
+        }, 5000);
     }
 </script>
 @endsection

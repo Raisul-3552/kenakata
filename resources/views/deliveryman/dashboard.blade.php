@@ -13,6 +13,7 @@
             <p class="small text-muted mt-2">Ready for assignments</p>
         </div>
     </div>
+    
     <div class="col-md-8">
         <div class="card h-100 border-0 shadow-lg p-4" style="background: rgba(22, 33, 62, 0.4);">
             <h5 class="text-gold mb-3">Today's Performance</h5>
