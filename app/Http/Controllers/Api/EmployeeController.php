@@ -38,6 +38,45 @@ class EmployeeController extends Controller
         return $employee ? (int) $employee->EmployeeID : null;
     }
 
+    private function rebalancePendingOrders()
+    {
+        $employees = DB::select("SELECT EmployeeID FROM Employee ORDER BY EmployeeID");
+
+        if (empty($employees)) {
+            return;
+        }
+
+        $activeCounts = [];
+        $currentCounts = DB::select("\n            SELECT EmployeeID, COUNT(*) as ActiveCount\n            FROM [Order]\n            WHERE EmployeeID IS NOT NULL\n              AND OrderStatus NOT IN ('Delivered', 'Cancelled')\n            GROUP BY EmployeeID\n        ");
+
+        foreach ($currentCounts as $row) {
+            $activeCounts[(int) $row->EmployeeID] = (int) $row->ActiveCount;
+        }
+
+        $pendingOrders = DB::select("\n            SELECT OrderID\n            FROM [Order]\n            WHERE OrderStatus = 'Pending'\n            ORDER BY OrderID ASC\n        ");
+
+        foreach ($pendingOrders as $order) {
+            $leastBusyEmployeeId = null;
+            $leastCount = null;
+
+            foreach ($employees as $employee) {
+                $employeeId = (int) $employee->EmployeeID;
+                $count = $activeCounts[$employeeId] ?? 0;
+
+                if ($leastBusyEmployeeId === null || $count < $leastCount || ($count === $leastCount && $employeeId < $leastBusyEmployeeId)) {
+                    $leastBusyEmployeeId = $employeeId;
+                    $leastCount = $count;
+                }
+            }
+
+            if ($leastBusyEmployeeId !== null) {
+                DB::update("\n                    UPDATE [Order]\n                    SET EmployeeID = ?\n                    WHERE OrderID = ?\n                ", [$leastBusyEmployeeId, $order->OrderID]);
+
+                $activeCounts[$leastBusyEmployeeId] = ($activeCounts[$leastBusyEmployeeId] ?? 0) + 1;
+            }
+        }
+    }
+
     public function getProducts()
     {
         // MSSQL Query: Get all products with category and details (no LEFT JOIN duplication)
@@ -243,16 +282,12 @@ class EmployeeController extends Controller
 
     public function getOrders()
     {
-        // MSSQL Query: Get all orders with customer info only (avoid LEFT JOIN duplication)
-        $orders = DB::select("
-            SELECT 
-                o.OrderID, o.CustomerID, o.EmployeeID, o.CouponID, o.OrderStatus, 
-                o.TotalAmount, o.OrderDate, o.Address,
-                c.CustomerName, c.Phone, c.Email
-            FROM [Order] o
-            INNER JOIN Customer c ON o.CustomerID = c.CustomerID
-            ORDER BY o.OrderDate DESC
-        ");
+        $this->rebalancePendingOrders();
+
+        $employeeId = request()->user()->EmployeeID;
+
+        // MSSQL Query: Get only this employee's assigned orders with customer info
+        $orders = DB::select("\n            SELECT \n                o.OrderID, o.CustomerID, o.EmployeeID, o.CouponID, o.OrderStatus, \n                o.TotalAmount, o.OrderDate, o.Address,\n                c.CustomerName, c.Phone, c.Email\n            FROM [Order] o\n            INNER JOIN Customer c ON o.CustomerID = c.CustomerID\n            WHERE o.EmployeeID = ?\n            ORDER BY o.OrderDate DESC\n        ", [$employeeId]);
 
         // For each order, fetch items and delivery info separately
         $result = array_map(function ($order) {

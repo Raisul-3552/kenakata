@@ -12,6 +12,73 @@ class AdminController extends Controller
 {
     use InteractsWithAccountEmails;
 
+    private function getLeastBusyEmployeeIdExcluding(array $excludedEmployeeIds = [])
+    {
+        $placeholders = [];
+        $params = [];
+
+        foreach ($excludedEmployeeIds as $excludedEmployeeId) {
+            $placeholders[] = '?';
+            $params[] = $excludedEmployeeId;
+        }
+
+        $notInClause = '';
+        if (!empty($placeholders)) {
+            $notInClause = 'WHERE e.EmployeeID NOT IN (' . implode(', ', $placeholders) . ')';
+        }
+
+        $employee = DB::selectOne("\n            SELECT TOP 1 e.EmployeeID\n            FROM Employee e\n            LEFT JOIN [Order] o\n                ON e.EmployeeID = o.EmployeeID\n               AND o.OrderStatus NOT IN ('Delivered', 'Cancelled')\n            " . $notInClause . "\n            GROUP BY e.EmployeeID\n            ORDER BY COUNT(o.OrderID) ASC, e.EmployeeID ASC\n        ", $params);
+
+        return $employee ? (int) $employee->EmployeeID : null;
+    }
+
+    private function reassignActiveOrdersFromEmployee($employeeId)
+    {
+        $activeOrders = DB::select("\n            SELECT OrderID\n            FROM [Order]\n            WHERE EmployeeID = ?\n              AND OrderStatus NOT IN ('Delivered', 'Cancelled')\n            ORDER BY OrderID ASC\n        ", [$employeeId]);
+
+        if (empty($activeOrders)) {
+            return true;
+        }
+
+        $remainingEmployees = DB::select("\n            SELECT EmployeeID FROM Employee WHERE EmployeeID != ? ORDER BY EmployeeID\n        ", [$employeeId]);
+
+        if (empty($remainingEmployees)) {
+            return false;
+        }
+
+        $activeCounts = [];
+        $counts = DB::select("\n            SELECT EmployeeID, COUNT(*) as ActiveCount\n            FROM [Order]\n            WHERE EmployeeID != ?\n              AND OrderStatus NOT IN ('Delivered', 'Cancelled')\n            GROUP BY EmployeeID\n        ", [$employeeId]);
+
+        foreach ($counts as $countRow) {
+            $activeCounts[(int) $countRow->EmployeeID] = (int) $countRow->ActiveCount;
+        }
+
+        foreach ($activeOrders as $order) {
+            $leastBusyEmployeeId = null;
+            $leastBusyCount = null;
+
+            foreach ($remainingEmployees as $remainingEmployee) {
+                $remainingEmployeeId = (int) $remainingEmployee->EmployeeID;
+                $count = $activeCounts[$remainingEmployeeId] ?? 0;
+
+                if ($leastBusyEmployeeId === null || $count < $leastBusyCount || ($count === $leastBusyCount && $remainingEmployeeId < $leastBusyEmployeeId)) {
+                    $leastBusyEmployeeId = $remainingEmployeeId;
+                    $leastBusyCount = $count;
+                }
+            }
+
+            if ($leastBusyEmployeeId === null) {
+                return false;
+            }
+
+            DB::update("\n                UPDATE [Order]\n                SET EmployeeID = ?\n                WHERE OrderID = ?\n            ", [$leastBusyEmployeeId, $order->OrderID]);
+
+            $activeCounts[$leastBusyEmployeeId] = ($activeCounts[$leastBusyEmployeeId] ?? 0) + 1;
+        }
+
+        return true;
+    }
+
     public function getEmployees()
     {
         // MSSQL Query: Get all employees
@@ -69,9 +136,33 @@ class AdminController extends Controller
 
     public function deleteEmployee($id)
     {
-        // MSSQL Query: Delete employee
-        DB::delete("DELETE FROM Employee WHERE EmployeeID = ?", [$id]);
-        return response()->json(['message' => 'Employee deleted successfully']);
+        DB::beginTransaction();
+
+        try {
+            $employee = DB::selectOne("SELECT * FROM Employee WHERE EmployeeID = ?", [$id]);
+
+            if (!$employee) {
+                DB::rollBack();
+                return response()->json(['message' => 'Employee not found'], 404);
+            }
+
+            $reassigned = $this->reassignActiveOrdersFromEmployee($id);
+
+            if (!$reassigned) {
+                DB::rollBack();
+                return response()->json(['message' => 'Cannot delete the only employee while active orders still exist.'], 422);
+            }
+
+            // MSSQL Query: Delete employee
+            DB::delete("DELETE FROM Employee WHERE EmployeeID = ?", [$id]);
+
+            DB::commit();
+
+            return response()->json(['message' => 'Employee deleted successfully']);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['message' => $e->getMessage()], 500);
+        }
     }
 
     public function dashboardStats()
