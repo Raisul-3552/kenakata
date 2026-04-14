@@ -25,6 +25,13 @@ class CustomerController extends Controller
         );
     }
 
+    private function getLeastBusyEmployeeId()
+    {
+        $employee = DB::selectOne("\n            SELECT TOP 1 e.EmployeeID\n            FROM Employee e\n            LEFT JOIN [Order] o\n                ON e.EmployeeID = o.EmployeeID\n               AND o.OrderStatus NOT IN ('Delivered', 'Cancelled')\n            GROUP BY e.EmployeeID\n            ORDER BY COUNT(o.OrderID) ASC, e.EmployeeID ASC\n        ");
+
+        return $employee ? (int) $employee->EmployeeID : null;
+    }
+
     // ─── Profile ──────────────────────────────────────────────────────────────
 
     public function getProfile(Request $request)
@@ -36,6 +43,7 @@ class CustomerController extends Controller
     {
         $customer = $request->user();
         $customer->update($request->only(['CustomerName', 'Phone', 'Address']));
+
         return response()->json(['message' => 'Profile updated successfully', 'customer' => $customer]);
     }
 
@@ -59,9 +67,6 @@ class CustomerController extends Controller
 
     // ─── Cart ─────────────────────────────────────────────────────────────────
 
-    /**
-     * Get or create the customer's cart, return items with product info.
-     */
     private function getOrCreateCart($customerID)
     {
         return Cart::firstOrCreate(['CustomerID' => $customerID]);
@@ -70,39 +75,35 @@ class CustomerController extends Controller
     public function getCart(Request $request)
     {
         $cart = $this->getOrCreateCart($request->user()->CustomerID);
+
         $items = CartItem::with('product.detail')
             ->where('CartID', $cart->CartID)
             ->get()
             ->map(function ($item) {
                 return [
-                    'id'       => $item->ProductID,
-                    'name'     => $item->product->ProductName ?? 'Unknown',
-                    'price'    => (float) $item->UnitPrice,
+                    'id' => $item->ProductID,
+                    'name' => $item->product->ProductName ?? 'Unknown',
+                    'price' => (float) $item->UnitPrice,
                     'quantity' => $item->Quantity,
-                    'image'    => $item->product->detail->Image ?? null,
+                    'image' => $item->product->detail->Image ?? null,
                 ];
             });
 
         return response()->json($items);
     }
 
-    /**
-     * Sync entire cart from client (merge localStorage on login).
-     * Body: [ { id, name, price, quantity }, ... ]
-     */
     public function syncCart(Request $request)
     {
         $cart = $this->getOrCreateCart($request->user()->CustomerID);
         $items = $request->items ?? [];
 
-        // Clear existing items and rebuild
         CartItem::where('CartID', $cart->CartID)->delete();
 
         foreach ($items as $item) {
             CartItem::create([
-                'CartID'    => $cart->CartID,
+                'CartID' => $cart->CartID,
                 'ProductID' => $item['id'],
-                'Quantity'  => $item['quantity'],
+                'Quantity' => $item['quantity'],
                 'UnitPrice' => $item['price'],
             ]);
         }
@@ -110,10 +111,6 @@ class CustomerController extends Controller
         return response()->json(['message' => 'Cart synced successfully']);
     }
 
-    /**
-     * Add one item (or increment quantity if already in cart).
-     * Body: { id, name, price, quantity }
-     */
     public function addToCart(Request $request)
     {
         $cart = $this->getOrCreateCart($request->user()->CustomerID);
@@ -127,9 +124,9 @@ class CustomerController extends Controller
             $existing->save();
         } else {
             CartItem::create([
-                'CartID'    => $cart->CartID,
+                'CartID' => $cart->CartID,
                 'ProductID' => $request->id,
-                'Quantity'  => $request->quantity ?? 1,
+                'Quantity' => $request->quantity ?? 1,
                 'UnitPrice' => $request->price,
             ]);
         }
@@ -137,10 +134,6 @@ class CustomerController extends Controller
         return response()->json(['message' => 'Item added to cart']);
     }
 
-    /**
-     * Update quantity of a specific product in cart.
-     * Body: { quantity }
-     */
     public function updateCartItem(Request $request, $productId)
     {
         $cart = $this->getOrCreateCart($request->user()->CustomerID);
@@ -163,9 +156,6 @@ class CustomerController extends Controller
         return response()->json(['message' => 'Cart updated']);
     }
 
-    /**
-     * Remove one product from cart.
-     */
     public function removeCartItem(Request $request, $productId)
     {
         $cart = $this->getOrCreateCart($request->user()->CustomerID);
@@ -177,13 +167,11 @@ class CustomerController extends Controller
         return response()->json(['message' => 'Item removed from cart']);
     }
 
-    /**
-     * Clear all items from cart.
-     */
     public function clearCart(Request $request)
     {
         $cart = $this->getOrCreateCart($request->user()->CustomerID);
         CartItem::where('CartID', $cart->CartID)->delete();
+
         return response()->json(['message' => 'Cart cleared']);
     }
 
@@ -192,9 +180,16 @@ class CustomerController extends Controller
     public function placeOrder(Request $request)
     {
         DB::beginTransaction();
+
         try {
             $wallet = $this->getOrCreateWallet($request->user()->CustomerID);
             $finalTotal = (float) $request->TotalAmount;
+            $employeeId = $this->getLeastBusyEmployeeId();
+
+            if (!$employeeId) {
+                DB::rollBack();
+                return response()->json(['message' => 'No employees are available to handle the order right now.'], 422);
+            }
 
             if ($wallet->Balance < $finalTotal) {
                 DB::rollBack();
@@ -202,19 +197,22 @@ class CustomerController extends Controller
             }
 
             $order = Order::create([
-                'CustomerID'  => $request->user()->CustomerID,
-                'CouponID'    => $request->CouponID,
+                'CustomerID' => $request->user()->CustomerID,
+                'EmployeeID' => $employeeId,
+                'CouponID' => $request->CouponID,
                 'OrderStatus' => 'Pending',
                 'TotalAmount' => $finalTotal,
-                'OrderDate'   => now()->format('Y-m-d'),
-                'Address'     => $request->Address,
+                'OrderDate' => now()->format('Y-m-d'),
+                'Address' => $request->Address,
             ]);
 
             foreach ($request->items as $item) {
                 $product = Product::find($item['ProductID']);
+
                 if (!$product) {
                     throw new \Exception("Product ID {$item['ProductID']} not found.");
                 }
+
                 if ($product->Stock < $item['Quantity']) {
                     throw new \Exception("Insufficient stock for {$product->ProductName}. Only {$product->Stock} left.");
                 }
@@ -223,15 +221,15 @@ class CustomerController extends Controller
                 $product->save();
 
                 OrderItem::create([
-                    'OrderID'   => $order->OrderID,
+                    'OrderID' => $order->OrderID,
                     'ProductID' => $item['ProductID'],
-                    'Quantity'  => $item['Quantity'],
+                    'Quantity' => $item['Quantity'],
                     'UnitPrice' => $item['UnitPrice'],
                 ]);
             }
 
-            // Clear DB cart after order placed
             $cart = Cart::where('CustomerID', $request->user()->CustomerID)->first();
+
             if ($cart) {
                 CartItem::where('CartID', $cart->CartID)->delete();
             }
@@ -248,6 +246,7 @@ class CustomerController extends Controller
             ]);
 
             DB::commit();
+
             return response()->json($order, 201);
         } catch (\Exception $e) {
             DB::rollBack();
@@ -262,14 +261,17 @@ class CustomerController extends Controller
             ->where('OrderStatus', '!=', 'Cancelled')
             ->orderByDesc('OrderDate')
             ->get();
+
         return response()->json($orders);
     }
 
     public function cancelOrder(Request $request, $id)
     {
         DB::beginTransaction();
+
         try {
-            $order = Order::with('items')->where('OrderID', $id)
+            $order = Order::with('items')
+                ->where('OrderID', $id)
                 ->where('CustomerID', $request->user()->CustomerID)
                 ->first();
 
@@ -285,6 +287,7 @@ class CustomerController extends Controller
 
             foreach ($order->items as $item) {
                 $product = Product::find($item->ProductID);
+
                 if ($product) {
                     $product->Stock += $item->Quantity;
                     $product->save();
@@ -309,6 +312,7 @@ class CustomerController extends Controller
             $order->save();
 
             DB::commit();
+
             return response()->json(['message' => 'Order cancelled successfully']);
         } catch (\Exception $e) {
             DB::rollBack();
@@ -320,14 +324,12 @@ class CustomerController extends Controller
 
     public function validateCoupon(Request $request)
     {
-        // Try stored procedure first, fallback to direct query
         try {
             $coupon = DB::select('EXEC ValidateCoupon ?', [$request->CouponCode]);
         } catch (\Exception $e) {
             $coupon = [];
         }
 
-        // Fallback: direct query if stored procedure fails or returns nothing
         if (empty($coupon)) {
             $today = now()->format('Y-m-d');
             $couponModel = Coupon::where('CouponCode', $request->CouponCode)
@@ -337,7 +339,7 @@ class CustomerController extends Controller
 
             if ($couponModel) {
                 return response()->json([
-                    'valid'  => true,
+                    'valid' => true,
                     'coupon' => $couponModel,
                 ]);
             }
@@ -371,6 +373,7 @@ class CustomerController extends Controller
         ]);
 
         DB::beginTransaction();
+
         try {
             $wallet = $this->getOrCreateWallet($request->user()->CustomerID);
             $amount = (float) $request->Amount;
@@ -387,6 +390,7 @@ class CustomerController extends Controller
             ]);
 
             DB::commit();
+
             return response()->json([
                 'message' => 'Balance added successfully',
                 'wallet' => $wallet,

@@ -151,13 +151,24 @@
     function loadProducts() {
         const productList = document.getElementById('product-list');
 
-        fetch(`${API_URL}/customer/products`, { headers: getHeaders() })
+        // Use public products endpoint - it returns the same data
+        // Will work even if auth has any issues, and customer is authenticated via localStorage token
+        fetch(`${API_URL}/products`, { headers: getHeaders() })
         .then(res => {
-            if (res.status === 401 || res.status === 403) logout();
+            if (!res.ok) {
+                throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+            }
             return res.json();
         })
         .then(data => {
-            if (data && data.length > 0) {
+            console.log('Products loaded:', data); // Debug log
+            
+            if (!data) {
+                productList.innerHTML = '<div class="col-12 py-5 text-center"><p class="text-muted">No response from server.</p></div>';
+                return;
+            }
+            
+            if (Array.isArray(data) && data.length > 0) {
                 productList.innerHTML = data.map(prod => {
                     const detail = prod.detail || {};
                     const offer  = getActiveOffer(prod.offers);
@@ -210,12 +221,12 @@
                     </div>
                 `}).join('');
             } else {
-                productList.innerHTML = '<div class="col-12 py-5 text-center"><p class="text-muted">No products found.</p></div>';
+                productList.innerHTML = '<div class="col-12 py-5 text-center"><p class="text-muted">No products found. Please check back later.</p></div>';
             }
         })
         .catch(err => {
-            console.error(err);
-            productList.innerHTML = '<div class="col-12 py-5 text-center text-danger">Error loading items</div>';
+            console.error('Product loading error:', err);
+            productList.innerHTML = `<div class="col-12 py-5 text-center text-danger"><div>Error loading items</div><small class="text-muted">${err.message}</small></div>`;
         });
     }
 </script>

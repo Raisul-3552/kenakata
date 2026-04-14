@@ -1,9 +1,3 @@
--- FILE: 05_triggers.sql
--- Description: Automating inventory management based on status changes.
--- Database: MS SQL Server
-
--- 1. trg_AfterOrderConfirmed
--- Reduce product stock when an order is updated to 'Confirmed'.
 CREATE TRIGGER trg_AfterOrderConfirmed
 ON [Order]
 AFTER UPDATE

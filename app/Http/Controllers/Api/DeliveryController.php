@@ -3,38 +3,63 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\Delivery;
-use App\Models\DeliveryMan;
-use App\Models\Order;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\DB;
 
 class DeliveryController extends Controller
 {
     public function getAssignedDeliveries(Request $request)
     {
-        $deliveries = Delivery::with(['order.customer'])
-            ->where('DelManID', $request->user()->DelManID)
-            ->get();
+        // MSSQL Query: Get all deliveries with order and customer info for a delivery man
+        $deliveries = DB::select("
+            SELECT 
+                d.DeliveryID, d.OrderID, d.DelManID, d.DeliveryStatus, d.DeliveryDate,
+                o.OrderID, o.CustomerID, o.OrderStatus, o.TotalAmount, o.OrderDate, o.Address,
+                c.CustomerID, c.CustomerName, c.Phone, c.Email
+            FROM Delivery d
+            INNER JOIN [Order] o ON d.OrderID = o.OrderID
+            INNER JOIN Customer c ON o.CustomerID = c.CustomerID
+            WHERE d.DelManID = ?
+        ", [$request->user()->DelManID]);
+        
         return response()->json($deliveries);
     }
 
     public function updateStatus(Request $request, $id)
     {
-        $delivery = Delivery::where('DeliveryID', $id)->first();
-        $delivery->update([
-            'DeliveryStatus' => $request->DeliveryStatus,
-            'DeliveryDate' => ($request->DeliveryStatus == 'Delivered' || $request->DeliveryStatus == 'Cancelled') ? now()->format('Y-m-d') : null,
-        ]);
+        // MSSQL Query: Get delivery details first
+        $delivery = DB::selectOne("
+            SELECT * FROM Delivery WHERE DeliveryID = ?
+        ", [$id]);
 
-        // Keep Order table in sync so employee dashboard reflects final delivery state.
+        if (!$delivery) {
+            return response()->json(['message' => 'Delivery not found'], 404);
+        }
+
+        // MSSQL Query: Update delivery status
+        $deliveryDate = ($request->DeliveryStatus == 'Delivered' || $request->DeliveryStatus == 'Cancelled') 
+                        ? now()->format('Y-m-d') 
+                        : null;
+
+        DB::update("
+            UPDATE Delivery 
+            SET DeliveryStatus = ?, DeliveryDate = ?
+            WHERE DeliveryID = ?
+        ", [$request->DeliveryStatus, $deliveryDate, $id]);
+
+        // Keep Order table in sync so employee dashboard reflects final delivery state
         if ($request->DeliveryStatus == 'Delivered') {
-            Order::where('OrderID', $delivery->OrderID)->update(['OrderStatus' => 'Delivered']);
+            DB::update("
+                UPDATE [Order] SET OrderStatus = 'Delivered' WHERE OrderID = ?
+            ", [$delivery->OrderID]);
         }
 
         // If delivered or cancelled, set rider back to Available
         if ($request->DeliveryStatus == 'Delivered' || $request->DeliveryStatus == 'Cancelled') {
-            DeliveryMan::where('DelManID', $delivery->DelManID)->update(['Status' => 'Available']);
+            DB::update("
+                UPDATE DeliveryMan SET Status = 'Available' WHERE DelManID = ?
+            ", [$delivery->DelManID]);
         }
 
         return response()->json(['message' => 'Status updated successfully']);
@@ -43,13 +68,17 @@ class DeliveryController extends Controller
     public function getProfile(Request $request)
     {
         $rider = $request->user();
-        $lifetimeDeliveries = Delivery::where('DelManID', $rider->DelManID)
-            ->where('DeliveryStatus', 'Delivered')
-            ->count();
+        
+        // MSSQL Query: Count lifetime deliveries
+        $result = DB::selectOne("
+            SELECT COUNT(*) as LifetimeDeliveries
+            FROM Delivery
+            WHERE DelManID = ? AND DeliveryStatus = 'Delivered'
+        ", [$rider->DelManID]);
             
         return response()->json([
             'rider' => $rider,
-            'lifetime_deliveries' => $lifetimeDeliveries,
+            'lifetime_deliveries' => $result->LifetimeDeliveries ?? 0,
         ]);
     }
 
@@ -63,17 +92,26 @@ class DeliveryController extends Controller
             'Address' => 'required|string|max:255',
         ]);
 
-        $data = [
-            'DelManName' => $request->DelManName,
-            'Phone' => $request->Phone,
-            'Address' => $request->Address,
-        ];
+        // MSSQL Query: Update delivery man profile
+        DB::update("
+            UPDATE DeliveryMan 
+            SET DelManName = ?, Phone = ?, Address = ?
+            WHERE DelManID = ?
+        ", [
+            $request->DelManName,
+            $request->Phone,
+            $request->Address,
+            $rider->DelManID
+        ]);
 
-        $rider->update($data);
+        // Fetch updated data
+        $updatedRider = DB::selectOne("
+            SELECT * FROM DeliveryMan WHERE DelManID = ?
+        ", [$rider->DelManID]);
 
         return response()->json([
             'message' => 'Profile updated successfully',
-            'rider' => $rider,
+            'rider' => $updatedRider,
         ]);
     }
 
@@ -86,8 +124,13 @@ class DeliveryController extends Controller
         }
 
         $request->validate(['new_password' => 'required|string|min:6']);
-        $rider->Password = Hash::make($request->new_password);
-        $rider->save();
+        
+        $hashedPassword = Hash::make($request->new_password);
+        
+        // MSSQL Query: Update password
+        DB::update("
+            UPDATE DeliveryMan SET Password = ? WHERE DelManID = ?
+        ", [$hashedPassword, $rider->DelManID]);
 
         return response()->json(['message' => 'Password changed successfully']);
     }
@@ -95,13 +138,23 @@ class DeliveryController extends Controller
     public function toggleStatus(Request $request)
     {
         $rider = $request->user();
-        $rider->Status = $rider->Status === 'Available' ? 'Busy' : 'Available';
-        $rider->save();
+        
+        // MSSQL Query: Toggle status between Available and Busy
+        $newStatus = $rider->Status === 'Available' ? 'Busy' : 'Available';
+        
+        DB::update("
+            UPDATE DeliveryMan SET Status = ? WHERE DelManID = ?
+        ", [$newStatus, $rider->DelManID]);
+
+        // Fetch updated data
+        $updatedRider = DB::selectOne("
+            SELECT * FROM DeliveryMan WHERE DelManID = ?
+        ", [$rider->DelManID]);
 
         return response()->json([
             'message' => 'Status updated successfully',
-            'status' => $rider->Status,
-            'rider' => $rider,
+            'status' => $newStatus,
+            'rider' => $updatedRider,
         ]);
     }
 }

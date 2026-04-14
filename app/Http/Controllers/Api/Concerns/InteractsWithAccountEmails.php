@@ -2,10 +2,7 @@
 
 namespace App\Http\Controllers\Api\Concerns;
 
-use App\Models\Admin;
-use App\Models\Customer;
-use App\Models\DeliveryMan;
-use App\Models\Employee;
+use Illuminate\Support\Facades\DB;
 
 trait InteractsWithAccountEmails
 {
@@ -13,28 +10,28 @@ trait InteractsWithAccountEmails
     {
         return [
             [
-                'model' => Admin::class,
+                'table' => '[Admin]',
+                'primaryKey' => 'AdminID',
                 'role' => 'admin',
                 'token' => 'admin-token',
-                'primaryKey' => 'AdminID',
             ],
             [
-                'model' => Employee::class,
+                'table' => 'Employee',
+                'primaryKey' => 'EmployeeID',
                 'role' => 'employee',
                 'token' => 'employee-token',
-                'primaryKey' => 'EmployeeID',
             ],
             [
-                'model' => Customer::class,
+                'table' => 'Customer',
+                'primaryKey' => 'CustomerID',
                 'role' => 'customer',
                 'token' => 'customer-token',
-                'primaryKey' => 'CustomerID',
             ],
             [
-                'model' => DeliveryMan::class,
+                'table' => 'DeliveryMan',
+                'primaryKey' => 'DelManID',
                 'role' => 'deliveryman',
                 'token' => 'deliveryman-token',
-                'primaryKey' => 'DelManID',
             ],
         ];
     }
@@ -42,14 +39,18 @@ trait InteractsWithAccountEmails
     protected function findAccountByEmail(string $email): ?array
     {
         foreach ($this->accountEmailDefinitions() as $definition) {
-            $user = $definition['model']::where('Email', $email)->first();
+            // MSSQL Query: Search for user by email in each table
+            $user = DB::selectOne("
+                SELECT * FROM " . $definition['table'] . " WHERE Email = ?
+            ", [$email]);
 
             if ($user) {
                 return [
                     'user' => $user,
                     'role' => $definition['role'],
                     'token' => $definition['token'],
-                    'model' => $definition['model'],
+                    'table' => $definition['table'],
+                    'primaryKey' => $definition['primaryKey'],
                 ];
             }
         }
@@ -60,13 +61,18 @@ trait InteractsWithAccountEmails
     protected function emailExistsAcrossAccounts(string $email, ?array $ignore = null): bool
     {
         foreach ($this->accountEmailDefinitions() as $definition) {
-            $query = $definition['model']::where('Email', $email);
+            // MSSQL Query: Check if email exists in this table
+            $query = "SELECT COUNT(*) as cnt FROM " . $definition['table'] . " WHERE Email = ?";
+            $params = [$email];
 
-            if ($ignore && ($ignore['model'] ?? null) === $definition['model'] && isset($ignore['id'])) {
-                $query->where($definition['primaryKey'], '!=', $ignore['id']);
+            if ($ignore && ($ignore['table'] ?? null) === $definition['table'] && isset($ignore['id'])) {
+                $query .= " AND " . $definition['primaryKey'] . " != ?";
+                $params[] = $ignore['id'];
             }
 
-            if ($query->exists()) {
+            $result = DB::selectOne($query, $params);
+            
+            if ($result && $result->cnt > 0) {
                 return true;
             }
         }
