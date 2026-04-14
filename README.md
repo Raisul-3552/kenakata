@@ -1,104 +1,505 @@
-# Kenakata Online Shopping Platform - Architecture & Logic Documentation
+# Kenakata Project Flow Documentation
 
-This file provides a comprehensive overview of the `kenakata_online_shoping_platform` database architecture, the business logic behind each operation, and how they map to your application's Controller and Repository layers.
+## 1. Purpose of This README
 
----
+This document explains end-to-end feature flow in the project:
 
-## 1. Database Overview & Schema Logic
+- Which frontend view is loaded
+- Which API route is called
+- Which controller method handles it
+- Which SQL query/procedure/trigger is used
+- Which transaction block is used and why
 
-The database is structured to support a fully-featured e-commerce platform with distinct role-based access control (Admin, Employee, Customer, DeliveryMan). It supports complex real-world use cases, such as discount coupons, limited-time offers, an integrated wallet system, and dynamic order tracking.
-
-### 1.1 User & Role Management
-- **`Admin` Table**: The superusers of the system. They have the highest level of authorization, primarily tasked with system monitoring and creating Employee profiles.
-- **`Employee` Table**: Associated with an `Admin` creator. They act as the operational workforce—managing inventory (`Product`), applying promotional campaigns (`Offer`, `Coupon`), and confirming customer `Orders`.
-- **`Customer` Table**: End-users who browse, add items to their `Cart`, place orders, and manage funds via their `Wallet`.
-- **`DeliveryMan` Table**: Personnel responsible for fulfilling the logistical side of an order. They keep a `Status` (`Available`/`Busy`) that dictates their assignment availability.
-
-### 1.2 Inventory & Product Management
-- **`Category` Table**: Ensures products are categorized logically for front-end browsing and filtering.
-- **`Product` & `ProductDetails` Tables**: 
-  - `Product`: Stores primary lookup details like Name, Brand, Price, and active Stock, linking directly to the Employee who listed it.
-  - `ProductDetails`: Uses a 1-to-1 relationship with `Product` to separate heavy descriptive data, images, and specifications, which helps speed up lightweight queries when simply listing products on the storefront.
-
-### 1.3 Marketing & Promotional Mechanics
-- **`Offer` Table**: Creates temporary, time-bound discounts directly applied to specific products. This enables "Flash Sales" and "Holiday Discounts."
-- **`Coupon` Table**: A global code-based discount requiring action from the user during the checkout phase to redeem value. Requires rigorous date and validity checking.
-
-### 1.4 The Shopping Lifecycle & Operations
-- **`Cart` & `CartItem`**: Tied uniquely to a `Customer`. This represents an ephemeral state. As customers add items, `CartItem` tracks quantities. 
-- **`Order` & `OrderItem`**: 
-  - When checkout occurs, the `Cart` items are migrated into persistent state as an `Order` with associated `OrderItem`s.
-  - Includes a strict constraint `OrderStatus IN ('Pending', 'Confirmed', 'Cancelled')`. 
-- **`Delivery` Table**: Once an order is confirmed, a `Delivery` record maps that order to a `DeliveryMan`, shifting states from `Pending` -> `In Progress` -> `Delivered`.
-
-### 1.5 Financial Logic (Wallet)
-- **`Wallet` & `WalletTransaction`**: Allows customers to maintain an on-platform digital balance. 
-- Transactions track if funds were added (`Credit`) or spent on an order (`Debit`). This is particularly useful for rapid refunds without relying on external payment gateway delays.
+This is meant for maintenance, demo explanation, and onboarding.
 
 ---
 
-## 2. Core Controller Logic & Database Interactions
+## 2. High-Level Architecture
 
-To properly handle application logic against this schema, controllers typically adhere to the following workflow patterns:
+### 2.1 Tech Stack
 
-### 2.1 Authentication & Authorization Logic
-- **Action**: Handles logins for all roles securely (e.g., matching the `$2y$12$...` hashed passwords).
-- **Database Interaction**: Querying users across different tables based on login context (`Admin`, `Employee`, `Customer`, `DeliveryMan`).
-- **Logic**: Setting session data or tokens that identify the user ID and user role, locking them into their respective dashboards.
+- Backend: Laravel (PHP)
+- Frontend: Blade views with inline JavaScript `fetch` API calls
+- Database: MS SQL Server
+- Auth: Laravel Sanctum tokens (token creation on model instances)
 
-### 2.2 Customer & Cart Operations
-- **Add to Cart**: 
-  - Validates `ProductID` and checks `Stock` in the `Product` table.
-  - Inserts/Updates quantities in the `CartItem` table.
-- **Checkout / Place Order**:
-  - Validates all `CartItem`s against current active `Stock`.
-  - Calculates `TotalAmount`, applying discounts via the `ValidateCoupon` stored procedure.
-  - Initiates an SQL Transaction to ensure data integrity:
-      1. Deduct wallet balance (Log to `WalletTransaction` as Debit, Update `Wallet` Balance).
-      2. Insert into `Order`.
-      3. Move `CartItem`s to `OrderItem`s using the generated `OrderID`.
-      4. Deduct `Product` Stock.
-      5. Clear `CartItem`s.
-  - If any failure occurs during this step, the transaction rolls back.
+### 2.2 Main Layers
 
-### 2.3 Employee Operations
-- **Product Management**: 
-  - Employees create a `Product` entry.
-  - The controller captures the new `ProductID` and immediately creates the associated `ProductDetails` row.
-- **Order Confirmation**:
-  - Invokes raw DB operation or calls the assigned stored procedure:
-    `EXEC ConfirmOrder @OrderID, @EmployeeID`
-  - This marks the `OrderStatus` from "Pending" to "Confirmed", assigning responsibility to the specific employee.
+- View layer: `resources/views/**`
+- Web route layer (view rendering): `routes/web.php`
+- API route layer: `routes/api.php`
+- Business logic/API: `app/Http/Controllers/Api/**`
+- SQL server-side components: `database/sql/03_stored_procedures.sql`, `database/sql/05_triggers.sql`
 
-### 2.4 Logistics & Delivery Management
-- **Assign Delivery**: 
-  - An Admin or Employee retrieves an `Available` DeliveryMan.
-  - Calls the Stored Procedure: 
-    `EXEC AssignDelivery @OrderID, @DelManID`
-  - Generates the record in the `Delivery` table and changes the `DeliveryMan.Status` from `Available` to `Busy`.
-- **Status Updates**: The DeliveryMan portal interacts via controllers to update the `DeliveryStatus` to "Delivered."
+### 2.3 Frontend Code Location
+
+Frontend code is mostly inside Blade files (HTML + JS in the same file):
+
+- Auth: `resources/views/auth/login.blade.php`, `resources/views/auth/register.blade.php`
+- Admin pages: `resources/views/admin/*.blade.php`
+- Employee pages: `resources/views/employee/*.blade.php`
+- Customer pages: `resources/views/customer/*.blade.php`
+- Delivery pages: `resources/views/deliveryman/*.blade.php`
+- Shared JS helpers and API base URL: `resources/views/layouts/app.blade.php`
 
 ---
 
-## 3. Stored Procedures: Purpose & Usage
+## 3. View Routing (Which View Is Called)
 
-Your SQL Stored Procedures act as direct data encapsulations for repeated or complex logic:
+Defined in `routes/web.php`.
 
-1. **`ConfirmOrder (@OrderID, @EmployeeID)`**
-   - **Reasoning**: Secures the database interaction by cleanly shifting state. Binds the confirming `EmployeeID` permanently to the `Order` trace for accountability and updates status in one go.
+### 3.1 Public
 
-2. **`AssignDelivery (@OrderID, @DelManID)`**
-   - **Reasoning**: Automatically sets up the initial mapping into the Delivery tracking table, defaulting gracefully to "Pending" without needing default assignment code in the controller.
+- `/login` -> `auth.login`
+- `/register` -> `auth.register`
 
-3. **`ValidateCoupon (@CouponCode)`**
-   - **Reasoning**: Ensures that the coupon is valid directly on the database execution level using `GETDATE()`. This avoids time-zone mismatching errors between the Application Server and the Database Server by letting SQL Server dictate "now".
+### 3.2 Admin
+
+- `/admin/dashboard` -> `admin.dashboard`
+- `/admin/profile` -> `admin.profile`
+- `/admin/admins` -> `admin.admins`
+
+### 3.3 Employee
+
+- `/employee/dashboard` -> `employee.dashboard`
+- `/employee/profile` -> `employee.profile`
+- `/employee/products` -> `employee.products`
+- `/employee/coupons` -> `employee.coupons`
+- `/employee/deliverymen` -> `employee.deliverymen`
+
+### 3.4 Customer
+
+- `/customer/dashboard` -> `customer.home`
+- `/customer/profile` -> `customer.profile`
+- `/customer/cart` -> `customer.cart`
+- `/customer/orders` -> `customer.orders`
+- `/customer/wallet` -> `customer.wallet`
+
+### 3.5 DeliveryMan
+
+- `/deliveryman/dashboard` -> `deliveryman.dashboard`
+- `/deliveryman/profile` -> `deliveryman.profile`
 
 ---
 
-## 4. Key Considerations & Potential Improvements
+## 4. API Routing (Which Controller Method Is Called)
 
-When interacting with this database in your codebase (like a Laravel Controller):
+Defined in `routes/api.php`.
 
-- **Transactions are critical**: You absolutely must wrap Cart-to-Order operations and Wallet deductions inside `DB::transaction()` blocks. If order insertion fails but your wallet deduct function succeeded, your funds drop out of sync with purchases.
-- **Role Scalability**: In the future, keeping Admin, Employee, Customer, and DeliveryMan as entirely separate tables makes single-point unified-authentication more complex. Often systems use a single `users` table mapped to a `roles` table, but the current segregation simplifies rigid relationships.
-- **Concurrency**: Use locking mechanisms (like `sharedLock()` or `lockForUpdate()` in Eloquent / ORMs) when modifying `Product.Stock` so two simultaneous buyers don't check out the exact same final product unit.
+### 4.1 Public APIs
+
+- `POST /api/login` -> `AuthController@login`
+- `POST /api/register` -> `AuthController@register`
+- Role-specific login/register aliases -> `AuthController`
+- `GET /api/products` -> `ProductController@index`
+- `GET /api/products/{id}` -> `ProductController@show`
+
+### 4.2 Admin APIs
+
+- Employee management -> `AdminController@getEmployees/addEmployee/deleteEmployee`
+- Customer search -> `AdminController@searchCustomers`
+- Admin management -> `AdminController@getAdmins/addAdmin/deleteAdmin`
+- Dashboard stats/profile/password -> `AdminController`
+
+### 4.3 Employee APIs
+
+- Profile/password -> `EmployeeController`
+- Product/offer/coupon CRUD -> `EmployeeController`
+- Order handling -> `EmployeeController@getOrders/confirmOrder/cancelOrder/assignDelivery`
+- DeliveryMan management + availability -> `EmployeeController`
+- Categories -> `EmployeeController@getCategories`
+
+### 4.4 Customer APIs
+
+- Profile/password -> `CustomerController`
+- Cart APIs -> `CustomerController@getCart/syncCart/addToCart/updateCartItem/removeCartItem/clearCart`
+- Order APIs -> `CustomerController@placeOrder/getOrderHistory/cancelOrder`
+- Coupon validation -> `CustomerController@validateCoupon`
+- Wallet APIs -> `CustomerController@getWallet/addWalletBalance`
+
+### 4.5 DeliveryMan APIs
+
+- Deliveries list/status update -> `DeliveryController@getAssignedDeliveries/updateStatus`
+- Profile/password/status toggle -> `DeliveryController`
+
+### 4.6 Common
+
+- `POST /api/logout` -> `AuthController@logout`
+
+---
+
+## 5. Feature-by-Feature Flow Map
+
+This section explains each major feature from view to SQL.
+
+### 5.1 Authentication
+
+#### 5.1.1 Login
+
+- Frontend view: `resources/views/auth/login.blade.php`
+- API called: `POST /api/login`
+- Controller: `AuthController@login`
+- Core logic:
+  1. Find account by email using raw SQL across role tables via `InteractsWithAccountEmails::findAccountByEmail`
+  2. Verify password hash with `Hash::check`
+  3. Hydrate tokenable model instance (`makeTokenableUser`) from DB row
+  4. Generate Sanctum token
+- SQL used:
+  - `SELECT * FROM [Admin|Employee|Customer|DeliveryMan] WHERE Email = ?`
+
+#### 5.1.2 Customer Register
+
+- Frontend view: `resources/views/auth/register.blade.php`
+- API called: `POST /api/register` (and alias `/api/customer/register`)
+- Controller: `AuthController@register`
+- Transaction: Yes (`DB::beginTransaction`)
+- SQL used:
+  - `INSERT INTO Customer (...) VALUES (...)`
+  - `SELECT TOP 1 * FROM Customer WHERE Email = ?`
+
+#### 5.1.3 DeliveryMan Register
+
+- API called: `POST /api/deliveryman/register`
+- Controller: `AuthController@deliveryManRegister`
+- Transaction: Yes
+- SQL used:
+  - `INSERT INTO DeliveryMan (...) VALUES (...)`
+  - `SELECT TOP 1 * FROM DeliveryMan WHERE Email = ?`
+
+---
+
+### 5.2 Product Browsing (Customer)
+
+- Frontend view: `resources/views/customer/home.blade.php`
+- API called: `GET /api/products`
+- Controller: `ProductController@index`
+- SQL used:
+  - Product list with category/details via joins
+  - Offers loaded separately from `Offer`
+- UI logic:
+  - Category filter is client-side (from loaded products)
+  - Active offer computed by date in JS
+
+No transaction and no stored procedure for this read-only flow.
+
+---
+
+### 5.3 Customer Cart
+
+#### 5.3.1 Cart Load
+
+- Views: `resources/views/customer/cart.blade.php`, `resources/views/layouts/customer.blade.php`
+- API: `GET /api/customer/cart`
+- Controller: `CustomerController@getCart`
+- SQL:
+  - `SELECT * FROM Cart WHERE CustomerID = ?` (or create)
+  - Join query over `CartItem`, `Product`, `ProductDetails`
+
+#### 5.3.2 Add Item
+
+- API: `POST /api/customer/cart/items`
+- Controller: `CustomerController@addToCart`
+- SQL:
+  - Check item existence by `CartID + ProductID`
+  - `UPDATE` quantity if exists, `INSERT` if not
+
+#### 5.3.3 Update/Remove/Clear
+
+- APIs:
+  - `PUT /api/customer/cart/items/{productId}`
+  - `DELETE /api/customer/cart/items/{productId}`
+  - `DELETE /api/customer/cart`
+- Controller: `CustomerController@updateCartItem/removeCartItem/clearCart`
+
+#### 5.3.4 Sync Cart
+
+- API: `POST /api/customer/cart/sync`
+- Controller: `CustomerController@syncCart`
+- Transaction: Yes
+- SQL:
+  - Delete old cart rows
+  - Insert current rows from payload
+
+---
+
+### 5.4 Customer Checkout / Place Order
+
+- View entry: `resources/views/customer/cart.blade.php`
+- API: `POST /api/customer/orders`
+- Controller: `CustomerController@placeOrder`
+- Transaction: Yes (critical)
+
+#### Logic
+
+1. Resolve wallet
+2. Check balance
+3. Choose least busy employee (active load = not Delivered/Cancelled)
+4. Insert order as Pending with assigned EmployeeID
+5. For each item:
+   - check product exists
+   - check stock
+   - decrement stock
+   - insert `OrderItem`
+6. Clear cart items
+7. Deduct wallet balance
+8. Insert wallet transaction (Debit)
+
+#### SQL blocks involved
+
+- `INSERT INTO [Order]`
+- `SELECT TOP 1 OrderID ...`
+- `SELECT * FROM Product WHERE ProductID = ?`
+- `UPDATE Product SET Stock = Stock - ?`
+- `INSERT INTO OrderItem`
+- `DELETE FROM CartItem`
+- `UPDATE Wallet`
+- `INSERT INTO WalletTransaction`
+
+---
+
+### 5.5 Customer Order History / Cancellation
+
+#### 5.5.1 Order History
+
+- View: `resources/views/customer/orders.blade.php`
+- API: `GET /api/customer/orders`
+- Controller: `CustomerController@getOrderHistory`
+- SQL:
+  - Order list query by `CustomerID`
+  - Separate query for items and delivery details per order
+
+#### 5.5.2 Cancel Order
+
+- API: `POST /api/customer/orders/{id}/cancel`
+- Controller: `CustomerController@cancelOrder`
+- Transaction: Yes
+
+#### Logic
+
+1. Ensure order belongs to customer and status is Pending
+2. Restore stock from `OrderItem`
+3. Refund wallet and add Credit transaction
+4. Mark order as Cancelled
+
+---
+
+### 5.6 Wallet
+
+#### 5.6.1 Get Wallet
+
+- View: `resources/views/customer/wallet.blade.php`
+- API: `GET /api/customer/wallet`
+- Controller: `CustomerController@getWallet`
+- SQL:
+  - wallet row
+  - latest 50 transactions
+
+#### 5.6.2 Add Balance
+
+- API: `POST /api/customer/wallet/add-balance`
+- Controller: `CustomerController@addWalletBalance`
+- Transaction: Yes
+- SQL:
+  - update balance
+  - insert Credit transaction
+
+---
+
+### 5.7 Admin Features
+
+#### 5.7.1 Employee CRUD
+
+- View: `resources/views/admin/dashboard.blade.php`
+- APIs: `/api/admin/employees` (GET/POST/DELETE)
+- Controller: `AdminController@getEmployees/addEmployee/deleteEmployee`
+
+#### Important deletion logic
+
+`deleteEmployee` now reassigns that employee's active (not Delivered/Cancelled) orders to least-busy remaining employees before deletion.
+
+- Transaction: Yes
+- If no other employee exists and active orders exist, delete is blocked.
+
+#### 5.7.2 Admin CRUD + Profile + Stats
+
+- Views: `resources/views/admin/admins.blade.php`, `resources/views/admin/profile.blade.php`
+- APIs:
+  - `/api/admin/all-admins`
+  - `/api/admin/profile`
+  - `/api/admin/dashboard-stats`
+- Controller: `AdminController`
+- Stats query computes employee count, customer count, product count, order count, confirmed revenue.
+
+---
+
+### 5.8 Employee Features
+
+#### 5.8.1 Product Management
+
+- View: `resources/views/employee/products.blade.php`
+- APIs: `/api/employee/products`, `/api/employee/categories`, `/api/employee/offers`
+- Controller: `EmployeeController@getProducts/addProduct/editProduct/deleteProduct/getCategories/addOffer/deleteOffer`
+
+`addProduct` uses transaction to insert into `Product` and `ProductDetails` atomically.
+
+#### 5.8.2 Coupon Management
+
+- View: `resources/views/employee/coupons.blade.php`
+- APIs: `/api/employee/coupons` and `/api/employee/offers`
+- Controller: `EmployeeController@getCoupons/addCoupon/deleteCoupon/getOffers/deleteOffer`
+
+#### 5.8.3 Order Management
+
+- View: `resources/views/employee/dashboard.blade.php`
+- APIs:
+  - `GET /api/employee/orders`
+  - `POST /api/employee/orders/{id}/confirm`
+  - `POST /api/employee/orders/{id}/cancel`
+  - `POST /api/employee/orders/{id}/assign-delivery`
+
+#### Logic notes
+
+- Employee sees only orders assigned to that EmployeeID
+- Pending orders are rebalanced across employees on fetch
+- Confirm updates order status (transaction)
+- Cancel restores stock and refunds customer wallet (transaction)
+
+#### 5.8.4 DeliveryMan Management
+
+- View: `resources/views/employee/deliverymen.blade.php`
+- APIs:
+  - `/api/employee/deliverymen`
+  - `/api/employee/deliverymen/all`
+  - `/api/employee/deliverymen/available`
+- Controller: `EmployeeController`
+
+---
+
+### 5.9 DeliveryMan Features
+
+#### 5.9.1 Delivery Dashboard
+
+- View: `resources/views/deliveryman/dashboard.blade.php`
+- APIs:
+  - `GET /api/deliveryman/deliveries`
+  - `POST /api/deliveryman/deliveries/{id}/update-status`
+- Controller: `DeliveryController@getAssignedDeliveries/updateStatus`
+
+`updateStatus` also updates related order state and rider availability as needed.
+
+#### 5.9.2 DeliveryMan Profile
+
+- View: `resources/views/deliveryman/profile.blade.php`
+- APIs:
+  - `/api/deliveryman/profile`
+  - `/api/deliveryman/profile/change-password`
+  - `/api/deliveryman/profile/toggle-status`
+
+---
+
+## 6. Stored Procedures (Where They Are Triggered)
+
+Defined in `database/sql/03_stored_procedures.sql`.
+
+### 6.1 `AssignDelivery`
+
+- Called by: `EmployeeController@assignDelivery`
+- Invocation: `EXEC AssignDelivery ?, ?`
+- Purpose: create `Delivery` row for an order with a rider.
+
+### 6.2 `ValidateCoupon`
+
+- Called by: `CustomerController@validateCoupon`
+- Invocation: `EXEC ValidateCoupon ?`
+- Purpose: date-valid coupon check in SQL Server.
+
+### 6.3 `ConfirmOrder`, `CancelDelivery`
+
+- Present in SQL file.
+- Current controllers mostly use direct SQL updates for order confirmation and delivery cancellation logic.
+
+---
+
+## 7. Triggers (Automatic DB Logic)
+
+Defined in `database/sql/05_triggers.sql`.
+
+### 7.1 `trg_AfterOrderConfirmed`
+
+- Fires after update on `[Order]`
+- If status becomes `Confirmed`, deducts stock using `OrderItem` quantities.
+
+### 7.2 `trg_AfterDeliveryCancelled`
+
+- Fires after update on `Delivery`
+- If `DeliveryStatus` becomes `Cancelled`, restores stock.
+
+---
+
+## 8. Transaction Usage Summary
+
+### 8.1 Uses Transactions
+
+- `AuthController@register`
+- `AuthController@deliveryManRegister`
+- `CustomerController@syncCart`
+- `CustomerController@placeOrder`
+- `CustomerController@cancelOrder`
+- `CustomerController@addWalletBalance`
+- `EmployeeController@addProduct`
+- `EmployeeController@confirmOrder`
+- `EmployeeController@cancelOrder`
+- `AdminController@deleteEmployee`
+
+### 8.2 Why Transactions Are Used
+
+- Prevent partial writes across money, stock, and order tables
+- Keep consistency when one business action touches multiple tables
+- Ensure rollback on failure
+
+---
+
+## 9. Important Implementation Notes
+
+1. API base URL is centralized in `resources/views/layouts/app.blade.php` as `API_URL = '/api'`.
+2. Customer add-to-cart from product cards is implemented in `resources/views/layouts/customer.blade.php` and customer pages.
+3. Authentication uses raw SQL for account lookup, then hydrates tokenable model objects only for Sanctum token creation.
+4. Least-busy assignment is applied in:
+   - Customer order placement
+   - Employee pending-order rebalance
+   - Admin employee delete reassignment
+
+---
+
+## 10. Quick Feature Trace Examples
+
+### Example A: Customer places order
+
+- View: `customer/cart.blade.php`
+- API: `POST /api/customer/orders`
+- Controller: `CustomerController@placeOrder`
+- SQL: Order + items + stock + wallet + wallet transaction
+- Transaction: Yes
+- Procedure: No
+- Trigger that may run later: `trg_AfterOrderConfirmed` when order is confirmed
+
+### Example B: Employee assigns rider
+
+- View: `employee/dashboard.blade.php`
+- API: `POST /api/employee/orders/{id}/assign-delivery`
+- Controller: `EmployeeController@assignDelivery`
+- Procedure: `AssignDelivery`
+- SQL after procedure: update rider status to Busy
+- Transaction: No explicit app transaction in this method
+
+### Example C: DeliveryMan marks delivered
+
+- View: `deliveryman/dashboard.blade.php`
+- API: `POST /api/deliveryman/deliveries/{id}/update-status`
+- Controller: `DeliveryController@updateStatus`
+- SQL: update delivery, update order status, update rider status
+- Trigger: none for Delivered in current SQL trigger file
+
+---
+
+If needed, a follow-up can add sequence diagrams per role (Admin, Employee, Customer, DeliveryMan) for viva/presentation use.
