@@ -18,6 +18,8 @@ class Delivery extends Model
         'DelManID',
         'DeliveryStatus',
         'DeliveryDate',
+        'Rating',
+        'RatingComment',
     ];
 
     public function order()

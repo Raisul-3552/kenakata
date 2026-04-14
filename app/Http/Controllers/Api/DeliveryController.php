@@ -76,6 +76,10 @@ class DeliveryController extends Controller
             WHERE DelManID = ? AND DeliveryStatus = 'Delivered'
         ", [$rider->DelManID]);
             
+        $avgRating = Delivery::where('DelManID', $rider->DelManID)
+            ->whereNotNull('Rating')
+            ->avg('Rating') ?? 0;
+            
         return response()->json([
             'rider' => $rider,
             'lifetime_deliveries' => $result->LifetimeDeliveries ?? 0,
