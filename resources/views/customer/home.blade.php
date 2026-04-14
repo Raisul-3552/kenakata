@@ -78,6 +78,36 @@
         align-items: center;
         gap: 8px;
     }
+
+    .filter-panel {
+        background: rgba(15, 23, 42, 0.6);
+        border: 1px solid var(--border-color);
+        border-radius: 14px;
+        padding: 16px;
+        margin-bottom: 24px;
+    }
+
+    .filter-label {
+        font-size: 0.85rem;
+        font-weight: 700;
+        color: var(--text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        margin-bottom: 8px;
+    }
+
+    .category-select {
+        background: rgba(2, 6, 23, 0.85);
+        border: 1px solid rgba(148, 163, 184, 0.25);
+        color: #f8fafc;
+    }
+
+    .category-select:focus {
+        border-color: var(--accent-cyan);
+        box-shadow: 0 0 0 0.2rem rgba(14, 165, 233, 0.15);
+        background: rgba(2, 6, 23, 0.95);
+        color: #f8fafc;
+    }
 </style>
 @endsection
 
@@ -88,6 +118,20 @@
             <h1 class="mb-2">Quality Products</h1>
             <p class="text-muted">Browse our collection of premium items</p>
             <div style="height: 4px; width: 60px; background-color: var(--accent-cyan); border-radius: 2px;"></div>
+        </div>
+    </div>
+
+    <div class="filter-panel">
+        <div class="row align-items-end g-3">
+            <div class="col-md-4">
+                <label for="category-filter" class="filter-label">Filter by Category</label>
+                <select id="category-filter" class="form-select category-select">
+                    <option value="all">All Categories</option>
+                </select>
+            </div>
+            <div class="col-md-8 text-md-end">
+                <div class="text-muted small" id="category-filter-summary">Showing all products</div>
+            </div>
         </div>
     </div>
 
@@ -104,6 +148,8 @@
 
 @section('customer_scripts')
 <script>
+    let allProducts = [];
+
     document.addEventListener('DOMContentLoaded', loadProducts);
 
     function formatDetailLabel(key) {
@@ -148,6 +194,90 @@
         return offers.find(o => o.StartDate <= today && o.EndDate >= today) || null;
     }
 
+    function getProductCategoryName(prod) {
+        return prod?.category?.CategoryName || 'Miscellaneous';
+    }
+
+    function populateCategoryFilter(products) {
+        const select = document.getElementById('category-filter');
+        const categories = [...new Set(products.map(getProductCategoryName))].sort((a, b) => a.localeCompare(b));
+
+        select.innerHTML = '<option value="all">All Categories</option>' + categories
+            .map(category => `<option value="${category.replace(/"/g, '&quot;')}">${category}</option>`)
+            .join('');
+
+        select.onchange = renderFilteredProducts;
+    }
+
+    function renderFilteredProducts() {
+        const productList = document.getElementById('product-list');
+        const selectedCategory = document.getElementById('category-filter').value;
+        const summary = document.getElementById('category-filter-summary');
+
+        const filteredProducts = selectedCategory === 'all'
+            ? allProducts
+            : allProducts.filter(prod => getProductCategoryName(prod) === selectedCategory);
+
+        summary.textContent = selectedCategory === 'all'
+            ? `Showing all products (${filteredProducts.length})`
+            : `Showing ${filteredProducts.length} product${filteredProducts.length === 1 ? '' : 's'} in ${selectedCategory}`;
+
+        if (filteredProducts.length === 0) {
+            productList.innerHTML = '<div class="col-12 py-5 text-center"><p class="text-muted">No products found for this category.</p></div>';
+            return;
+        }
+
+        productList.innerHTML = filteredProducts.map(prod => {
+            const detail = prod.detail || {};
+            const offer  = getActiveOffer(prod.offers);
+
+            const originalPrice = parseFloat(prod.Price);
+            const discount      = offer ? parseFloat(offer.DiscountAmount) : 0;
+            const finalPrice    = Math.max(0, originalPrice - discount);
+
+            const priceHtml = offer
+                ? `<div class="d-flex align-items-center gap-2 flex-wrap">
+                       <div class="price-text">Tk ${finalPrice.toFixed(0)}</div>
+                       <div class="price-original">Tk ${originalPrice.toFixed(0)}</div>
+                       <span class="offer-badge">-Tk ${discount.toFixed(0)} OFF</span>
+                   </div>`
+                : `<div class="price-text">Tk ${originalPrice.toFixed(0)}</div>`;
+
+            const imgHtml = detail.Image
+                ? `<img src="${detail.Image}" alt="${prod.ProductName}" class="product-img" onerror="this.outerHTML='<div class=\\'product-img-placeholder\\'>📦</div>'">`
+                : `<div class="product-img-placeholder">📦</div>`;
+
+            return `
+            <div class="col-md-4 col-sm-6">
+                <div class="dark-card product-card p-4">
+                    ${imgHtml}
+                    <div class="d-flex justify-content-between align-items-start mb-3">
+                        <div>
+                            <h5 class="mb-1 text-white">${prod.ProductName}</h5>
+                            <span class="text-muted small">${getProductCategoryName(prod)}</span>
+                        </div>
+                        <span class="product-badge">${prod.Brand}</span>
+                    </div>
+
+                    <div class="mb-4">
+                        <p class="text-muted small mb-3">${detail.Description || 'High quality product from Kenakata.'}</p>
+                        ${renderDetailAttributes(detail)}
+                    </div>
+
+                    <div class="mt-auto pt-3 border-top border-secondary border-opacity-25">
+                        <div class="d-flex align-items-center justify-content-between mb-3">
+                            ${priceHtml}
+                            <div class="text-muted small">Stock: ${prod.Stock}</div>
+                        </div>
+                        <button class="btn btn-cyan w-100 py-2" onclick='addToCart({id: ${prod.ProductID}, name: "${prod.ProductName.replace(/"/g,"&quot;")}", price: ${finalPrice}})'>
+                            🛒 Add to Cart
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `}).join('');
+    }
+
     function loadProducts() {
         const productList = document.getElementById('product-list');
 
@@ -169,57 +299,9 @@
             }
             
             if (Array.isArray(data) && data.length > 0) {
-                productList.innerHTML = data.map(prod => {
-                    const detail = prod.detail || {};
-                    const offer  = getActiveOffer(prod.offers);
-
-                    // Price calculation
-                    const originalPrice = parseFloat(prod.Price);
-                    const discount      = offer ? parseFloat(offer.DiscountAmount) : 0;
-                    const finalPrice    = Math.max(0, originalPrice - discount);
-
-                    const priceHtml = offer
-                        ? `<div class="d-flex align-items-center gap-2 flex-wrap">
-                               <div class="price-text">Tk ${finalPrice.toFixed(0)}</div>
-                               <div class="price-original">Tk ${originalPrice.toFixed(0)}</div>
-                               <span class="offer-badge">-Tk ${discount.toFixed(0)} OFF</span>
-                           </div>`
-                        : `<div class="price-text">Tk ${originalPrice.toFixed(0)}</div>`;
-
-                    // Image or placeholder
-                    const imgHtml = detail.Image
-                        ? `<img src="${detail.Image}" alt="${prod.ProductName}" class="product-img" onerror="this.outerHTML='<div class=\\'product-img-placeholder\\'>📦</div>'">`
-                        : `<div class="product-img-placeholder">📦</div>`;
-
-                    return `
-                    <div class="col-md-4 col-sm-6">
-                        <div class="dark-card product-card p-4">
-                            ${imgHtml}
-                            <div class="d-flex justify-content-between align-items-start mb-3">
-                                <div>
-                                    <h5 class="mb-1 text-white">${prod.ProductName}</h5>
-                                    <span class="text-muted small">${prod.category ? prod.category.CategoryName : 'Miscellaneous'}</span>
-                                </div>
-                                <span class="product-badge">${prod.Brand}</span>
-                            </div>
-
-                            <div class="mb-4">
-                                <p class="text-muted small mb-3">${detail.Description || 'High quality product from Kenakata.'}</p>
-                                ${renderDetailAttributes(detail)}
-                            </div>
-
-                            <div class="mt-auto pt-3 border-top border-secondary border-opacity-25">
-                                <div class="d-flex align-items-center justify-content-between mb-3">
-                                    ${priceHtml}
-                                    <div class="text-muted small">Stock: ${prod.Stock}</div>
-                                </div>
-                                <button class="btn btn-cyan w-100 py-2" onclick='addToCart({id: ${prod.ProductID}, name: "${prod.ProductName.replace(/"/g,"&quot;")}", price: ${finalPrice}})'>
-                                    🛒 Add to Cart
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                `}).join('');
+                allProducts = data;
+                populateCategoryFilter(data);
+                renderFilteredProducts();
             } else {
                 productList.innerHTML = '<div class="col-12 py-5 text-center"><p class="text-muted">No products found. Please check back later.</p></div>';
             }

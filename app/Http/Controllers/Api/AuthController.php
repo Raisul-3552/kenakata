@@ -70,12 +70,11 @@ class AuthController extends Controller
                 $request->Address,
             ]);
 
-            // Get the newly created customer as Model instance
-            $customer = \App\Models\Customer::where('Email', $request->Email)->first();
+            $customerRow = DB::selectOne("\n                SELECT TOP 1 * FROM Customer WHERE Email = ?\n            ", [$request->Email]);
 
             DB::commit();
 
-            // Create token using Sanctum
+            $customer = $this->makeTokenableUser('customer', $customerRow);
             $token = $customer->createToken('customer-token')->plainTextToken;
 
             return response()->json([
@@ -123,12 +122,11 @@ class AuthController extends Controller
                 'Available',
             ]);
 
-            // Get the newly created delivery man as Model instance
-            $deliveryMan = \App\Models\DeliveryMan::where('Email', $request->Email)->first();
+            $deliveryManRow = DB::selectOne("\n                SELECT TOP 1 * FROM DeliveryMan WHERE Email = ?\n            ", [$request->Email]);
 
             DB::commit();
 
-            // Create token using Sanctum
+            $deliveryMan = $this->makeTokenableUser('deliveryman', $deliveryManRow);
             $token = $deliveryMan->createToken('deliveryman-token')->plainTextToken;
 
             return response()->json([
@@ -151,7 +149,7 @@ class AuthController extends Controller
         ]);
 
         $account = $this->findAccountByEmail($request->Email);
-        
+
         if (!$account) {
             return response()->json(['message' => 'Invalid credentials'], 401);
         }
@@ -162,16 +160,13 @@ class AuthController extends Controller
             return response()->json(['message' => 'Invalid credentials'], 401);
         }
 
-        // Get the actual Model instance to create a token
-        $modelClass = $this->getModelClassForRole($account['role']);
-        if (!$modelClass) {
-            return response()->json(['message' => 'Invalid user role'], 401);
-        }
-
         try {
-            $userModel = $modelClass::where('Email', $request->Email)->firstOrFail();
-            
-            // Create token using Sanctum
+            $userModel = $this->makeTokenableUser($account['role'], $user);
+
+            if (!$userModel) {
+                return response()->json(['message' => 'Invalid user role'], 401);
+            }
+
             $tokenResponse = $userModel->createToken($account['token']);
             $token = $tokenResponse->plainTextToken;
 
@@ -186,23 +181,29 @@ class AuthController extends Controller
         }
     }
 
-    private function getModelClassForRole($role)
+    private function makeTokenableUser(string $role, object $row)
     {
-        $roleModelMap = [
-            'admin' => \App\Models\Admin::class,
-            'employee' => \App\Models\Employee::class,
-            'customer' => \App\Models\Customer::class,
-            'deliveryman' => \App\Models\DeliveryMan::class,
+        $modelMap = [
+            'admin' => new \App\Models\Admin(),
+            'employee' => new \App\Models\Employee(),
+            'customer' => new \App\Models\Customer(),
+            'deliveryman' => new \App\Models\DeliveryMan(),
         ];
 
-        return $roleModelMap[$role] ?? null;
+        $model = $modelMap[$role] ?? null;
+
+        if (!$model) {
+            return null;
+        }
+
+        $model->forceFill((array) $row);
+        $model->exists = true;
+
+        return $model;
     }
     
     public function logout(Request $request)
     {
-        // In Sanctum, you'd delete the current access token
-        // For this raw SQL version, we just return success
-        // You may need to implement token revocation separately
         return response()->json(['message' => 'Logged out successfully']);
     }
 }
